@@ -389,8 +389,6 @@ __declspec(dllimport) ServiceDescriptorTableEntry_t    KeServiceDescriptorTable;
 #endif
 
 
-
-
 #define   SERVICE_ID64(_function)     (*(PULONG)((PUCHAR)_function + 4))  //64位进程
 #define   SERVICE_ID32(_function)     (*(PULONG)((PUCHAR)_function + 1))  //32位进程
 
@@ -418,6 +416,23 @@ typedef struct _PARAMX
 
 ULONG_PTR GetSSDTFuncCurAddr(LONG id);
 
+typedef struct _MY_PROCESS_INFO{
+	LIST_ENTRY Entry;
+	WCHAR    exename[216];
+}MY_PROCESS_INFO, *PMY_PROCESS_INFO;
+	
+NTSTATUS AppendListNode(CONST WCHAR name[]);
+
+LIST_ENTRY g_ListProcess;
+BOOLEAN  IsByInjectProc(const WCHAR* name);
+NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
+ULONG 	 MzGetFileSize(HANDLE hfile);
+PVOID      g_pDll64=NULL;
+ULONG      g_iDll64=0;
+PVOID      g_pDll32=NULL;
+ULONG      g_iDll32=0;
+
+void MyDecryptFile(PVOID pdata, int len);
 
 
 

