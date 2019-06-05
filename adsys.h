@@ -10,10 +10,6 @@
 #include <ntimage.h>
 
 
-
-
-
-
 #define BUFFER_SWAP_TAG                   'bdBS'
 #define CONTEXT_TAG                       'xcBS'
 #define NAME_TAG                          'mnBS'
@@ -435,4 +431,30 @@ ULONG      g_iDll32=0;
 void MyDecryptFile(PVOID pdata, int len);
 
 
+
+typedef struct _WORKITEMPARAM 
+{    
+    ULONG pid;
+    ULONG bit;
+} WORKITEMPARAM, * PWORKITEMPARAM;
+ 
+void  newWorkItem(ULONG bit);
+VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
+//VOID
+//IoInitializeWorkItem(
+//    __in PVOID IoObject,
+//    __in PIO_WORKITEM IoWorkItem
+//    );
+//VOID
+//IoQueueWorkItemEx(
+//    __in PIO_WORKITEM IoWorkItem,
+//    __in PIO_WORKITEM_ROUTINE_EX WorkerRoutine,
+//    __in WORK_QUEUE_TYPE QueueType,
+//    __in_opt __drv_aliasesMem PVOID Context
+//    );
+ VOID IoUninitializeWorkItem(
+    __in PIO_WORKITEM IoWorkItem
+    );
+
+PDRIVER_OBJECT  g_drobj;
 
