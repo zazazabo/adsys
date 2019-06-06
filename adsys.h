@@ -21,18 +21,9 @@
 #define MIN_SECTOR_SIZE 0x200
 
 
-
-
-
-
-
-
 #define kprintf     DbgPrint
 #define kmalloc(_s) ExAllocatePoolWithTag(NonPagedPool, _s, 'SYSQ')
 #define kfree(_p)   ExFreePool(_p)
-
-
-
 
 
 typedef struct _RTL_USER_PROCESS_PARAMETERS32 {
@@ -100,12 +91,6 @@ typedef struct _VOLUME_CONTEXT {
 
 
 
-
-
-
-
-
-
 typedef PPEB(__stdcall *P_PsGetProcessWow64Process)(PEPROCESS);
 P_PsGetProcessWow64Process PsGetProcessWow64Process = NULL;
 typedef PPEB(__stdcall *P_PsGetProcessPeb)(PEPROCESS);
@@ -114,37 +99,15 @@ P_PsGetProcessPeb     PsGetProcessPeb = NULL;
 DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName);
 
 
-
-
-
-
 BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[]);
 
+NTSTATUS DriverEntry (__in PDRIVER_OBJECT DriverObject,__in PUNICODE_STRING RegistryPath);
 
-
-
-NTSTATUS DriverEntry (
-    __in PDRIVER_OBJECT DriverObject,
-    __in PUNICODE_STRING RegistryPath
-);
-
-
-
-
-NTSTATUS FilterUnload (
-    __in FLT_FILTER_UNLOAD_FLAGS Flags
-);
-
+NTSTATUS FilterUnload ( __in FLT_FILTER_UNLOAD_FLAGS Flags);
 
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[]);
 
-
-
-
-VOID CleanVolumCtx(
-    IN PFLT_CONTEXT Context,
-    IN FLT_CONTEXT_TYPE ContextType
-);
+VOID CleanVolumCtx(IN PFLT_CONTEXT Context,IN FLT_CONTEXT_TYPE ContextType);
 
 
 NTSTATUS
@@ -440,22 +403,7 @@ typedef struct _WORKITEMPARAM
  
 void  newWorkItem(ULONG bit);
 VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
-//VOID
-//IoInitializeWorkItem(
-//    __in PVOID IoObject,
-//    __in PIO_WORKITEM IoWorkItem
-//    );
-//VOID
-//IoQueueWorkItemEx(
-//    __in PIO_WORKITEM IoWorkItem,
-//    __in PIO_WORKITEM_ROUTINE_EX WorkerRoutine,
-//    __in WORK_QUEUE_TYPE QueueType,
-//    __in_opt __drv_aliasesMem PVOID Context
-//    );
- VOID IoUninitializeWorkItem(
-    __in PIO_WORKITEM IoWorkItem
-    );
+VOID IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 
 PDRIVER_OBJECT  g_drobj;
-
 void  initGlobeFunc(PIMAGE_INFO     ImageInfo);

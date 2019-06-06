@@ -2044,13 +2044,10 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
 
         if(!NT_SUCCESS(status)) {
             kprintf("[InjectDll] status:%x", status);
-
             goto HHHH;
         }
 
-        kprintf("[InjectDll] dllbase:%p", dllbase);
-
-
+//        kprintf("[InjectDll] dllbase:%p", dllbase);
 
         RtlZeroMemory(&param, sizeof(PARAMX));
 
@@ -2061,7 +2058,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             goto HHHH;
         }
 
-        kprintf("[InjectDll] MemloadBase:%p", MemloadBase);
+//        kprintf("[InjectDll] MemloadBase:%p", MemloadBase);
         //Ð´Èëdll
         status = NewNtWriteVirtualMemory(ProcessHandle, dllbase, pOldDll, sizeDll, &uWriteRet);
 
@@ -2084,7 +2081,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
 
         pParambase = (PUCHAR)MemloadBase + sizeMemLoad;
         pCall = (PUCHAR)MemloadBase + sizeof(PARAMX) + sizeMemLoad;
-        kprintf("[InjectDll] MemloadBase:%p pParambase:%p ", MemloadBase, pParambase);
+//        kprintf("[InjectDll] MemloadBase:%p pParambase:%p ", MemloadBase, pParambase);
         //Ð´Èëmemload param
         status = NewNtWriteVirtualMemory(ProcessHandle, pParambase, &param, sizeof(PARAMX), &uWriteRet);
 
@@ -2277,16 +2274,11 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
     LARGE_INTEGER                localTime;
     IO_STATUS_BLOCK                ioStatus;
     FILE_BASIC_INFORMATION        flBscInfo;
-    DbgPrint("call WorkerItemQueryFileInfoRoutine Context:%x", Context);
 
     if (MmIsAddressValid(Context))
     {
         PWORKITEMPARAM pParam = (PWORKITEMPARAM)Context;
         PEPROCESS ProcessObj = NULL;
-
-
-        kprintf("pid:%x bit:%d", pParam->pid, pParam->bit);
-
         if (NT_SUCCESS(PsLookupProcessByProcessId( pParam->pid, &ProcessObj)))
         {
 
