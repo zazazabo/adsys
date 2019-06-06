@@ -21,6 +21,7 @@ Environment:
 #include <fltKernel.h>
 #include <dontuse.h>
 #include <suppress.h>
+#include <string.h>
 #include "adsys.h"
 #pragma prefast(disable:__WARNING_ENCODE_MEMBER_FUNCTION_POINTER, "Not valid for kernel mode drivers")
 
@@ -248,14 +249,19 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
         PUNICODE_STRING   pCommandline = NULL;
         UNICODE_STRING    pImagePath = { 0 };
         UNICODE_STRING    tempcommand = { 0 };
-        WCHAR  pexe[265] = { 0 };
+        WCHAR  pexe[512] = { 0 };
         PRTL_USER_PROCESS_PARAMETERS64 processParam = (PRTL_USER_PROCESS_PARAMETERS64)peb64->ProcessParameters;
 
-        if (MmIsAddressValid(processParam) == FALSE || processParam->ImagePathName.Length > 265) {
+        if (MmIsAddressValid(processParam) == FALSE || processParam->ImagePathName.Length > 512) {
             return FALSE;
         }
+
+//	   	kprintf("ImagePathName:%wZ",processParam->ImagePathName);
+		
         if (MmIsAddressValid(processParam->ImagePathName.Buffer)) {
+			
             WCHAR *pfind = NULL;
+			WCHAR *pexefind=NULL;
             RtlInitUnicodeString(&pImagePath, processParam->ImagePathName.Buffer);
             RtlCopyMemory(pexe, (void *)pImagePath.Buffer, pImagePath.Length);
             pfind = wcsrchr(pexe, L'\\');
@@ -283,7 +289,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
         PUNICODE_STRING32   pCommandline = NULL;
         UNICODE_STRING32    pImagePath = { 0 };
         UNICODE_STRING32    tempcommand;
-        WCHAR  pexe[265] = { 0 };
+        WCHAR  pexe[512] = { 0 };
 
         ULONG   ImageBuffeLen=259;
         WCHAR  *pImageBuffer=NULL;
@@ -299,7 +305,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
         ImageBuffeLen = processParam->ImagePathName.Length;
 
 
-        if (MmIsAddressValid((PVOID)pImageBuffer)&&ImageBuffeLen<265) {
+        if (MmIsAddressValid((PVOID)pImageBuffer)&&ImageBuffeLen<512) {
             WCHAR *pfind=NULL;
             RtlCopyMemory(pexe, (void *) pImageBuffer, ImageBuffeLen);
             pfind = wcsrchr(pexe, L'\\');
@@ -1900,7 +1906,13 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
     wchar_t* pfindexe = NULL;
     int i = 0;
 
-    if(FullImageName == NULL || MmIsAddressValid(FullImageName) == FALSE || FullImageName->Length > 216) {
+	if (ProcessId==0)
+		{
+				//DbgPrint("ProcessId£º%x FullImageName:%wZ  ",ProcessId,FullImageName);
+				goto fun_ret;
+		}
+
+    if(FullImageName == NULL || MmIsAddressValid(FullImageName) == FALSE || FullImageName->Length > 512) {
         return;
     }
 
@@ -1911,159 +1923,37 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
         goto fun_ret;
 
     ++pfind;
-
-
-
     if (_wcsicmp(pfind,L"ntdll.dll")==0) {
-
-        if(!m_pCreateThread || !ZwProtectVirtualMemory || !fnHookfunc || !ZwWriteVirtualMemory) {
-            ZwWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwWriteVirtualMemory");
-            ZwCreateThreadEx = (TYPE_NtCreateThreadEx) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThreadEx");        //
-            ZwCreateThread = (TYPE_NtCreateThread) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThread");
-            fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
-            ZwProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwProtectVirtualMemory");
-            m_pCreateThread = ZwCreateThreadEx == NULL ? (PVOID)ZwCreateThread : (PVOID)ZwCreateThreadEx;
-            kprintf("[ImageNotify] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
-
-            if(m_pCreateThread && ZwProtectVirtualMemory && ZwWriteVirtualMemory) {
-                ULONG CreateThreadId = NULL;
-                ULONG protectvmId = NULL;
-                ULONG WriteId = NULL;
-                if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-                    CreateThreadId = (ULONG)SERVICE_ID64(m_pCreateThread);
-                    protectvmId = (ULONG)SERVICE_ID64(ZwProtectVirtualMemory);
-                    WriteId = (ULONG)SERVICE_ID64(ZwWriteVirtualMemory);
-                } else {
-                    CreateThreadId =   SERVICE_ID32(m_pCreateThread);
-                    protectvmId =   SERVICE_ID32(ZwProtectVirtualMemory);
-                    WriteId = (ULONG)SERVICE_ID32(ZwWriteVirtualMemory);
-                }
-
-                if(CreateThreadId && protectvmId && WriteId) {
-                    NtProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory)GetSSDTFuncCurAddr(protectvmId);
-                    NtWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory)GetSSDTFuncCurAddr(WriteId);
-                    if(m_pCreateThread == ZwCreateThreadEx) {
-                        NtCreateThreadEx = (TYPE_NtCreateThreadEx)GetSSDTFuncCurAddr(CreateThreadId);
-                    } else {
-                        NtCreateThread = (TYPE_NtCreateThread)GetSSDTFuncCurAddr(CreateThreadId);
-                    }
-                    kprintf("[ImageNotify] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
-                    kprintf("[ImageNotify] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
-                }
-            }
-
-        }
-
-
-        if(NT_SUCCESS(PsLookupProcessByProcessId(ProcessId, &ProcessObj))) {
-
-            pPEB = PsGetProcessPeb==NULL?NULL:PsGetProcessPeb(ProcessObj);
+		initGlobeFunc(ImageInfo);
+		_wcslwr(pTempBuf);
+	ProcessObj=PsGetCurrentProcess();
 #ifdef _AMD64_
-				 if(pPEB && (ULONG64)pPEB < (ULONG64)0xFFFFFFFF) {
-
-	  					 if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-	  						 BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-	  						 if(bfind == TRUE && IsByInjectProc(exename)) {
-	  							 kprintf("[ImageNotify] x64 32 bit inject pid:%x",PsGetCurrentProcessId());
-//								 newWorkItem(32);
-	  							 InjectDll(ProcessObj, 32);
-	  						 }
-	  					 }
-
-				 
-//				 						kprintf("x86 pPEB:%p pid:%d",pPEB,PsGetCurrentProcessId());
-										
-				 }else  if(pPEB && (ULONG64)pPEB > (ULONG64)0xFFFFFFFF){
-					 kprintf("[ImageNotify] x64 32 bit inject pid:%x",PsGetCurrentProcessId());
-					 InjectDll(ProcessObj, 64);
-				 }
-
-//                  kprintf("pPEB:%p pfind:%ws",pPEB,pfind);
-//                  if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
-//                      if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-//                          BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-//                          if(bfind == TRUE && IsByInjectProc(exename)) {
-//                              kprintf("[ImageNotify] x64 32 bit inject");
-//                              InjectDll(ProcessObj, 32);
-//                          }
-//                      }
-//
-//                  } else if(pPEB && ((ULONG64)pPEB > (ULONG64)0x7FFFFFFF)) {
-//                      BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-//                      if(bfind == TRUE && IsByInjectProc(exename)) {
-//                          kprintf("[ImageNotify] x64 64 bit inject");
-////                            InjectDll(ProcessObj, 64);
-//                      }
-//                  }
+		 //x64 add code
+		pPEB=PsGetProcessWow64Process(ProcessObj);
+ 		if(wcsstr(pTempBuf,L"\\syswow64\\")!=NULL){
+			BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
+				if(bfind == TRUE && IsByInjectProc(exename)) {
+						InjectDll(ProcessObj, 32);
+			 	}
+		}else{
+			if(pPEB==NULL){
+				pPEB=PsGetProcessPeb(ProcessObj);
+				if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
+					newWorkItem(64);
+				}	
+			}
+		}
 #else
-
-            if (TRUE) {
-                BOOLEAN   bfind=GetProcessNameByObj(ProcessObj,exename);
-                if (bfind&&IsByInjectProc(exename)) {
-					newWorkItem(32);
-//                    InjectDll(ProcessObj, 32);
-                }
-            }
+	//x86 add code
+	pPEB=PsGetProcessPeb(ProcessObj);
+	if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
+	  	newWorkItem(32);
+	}
+	
 #endif
-            ObfDereferenceObject(ProcessObj);
-        }
-
-
-
-
 
 
     }
-
-
-
-
-//    if(pfindexe&&IsByInjectProc(pfindexe)) {
-//        kprintf("[ImageNotify] find %ws", pTempBuf);
-//
-//        if(NT_SUCCESS(PsLookupProcessByProcessId(ProcessId, &ProcessObj))) {
-//
-//            pPEB = PsGetProcessPeb==NULL?NULL:PsGetProcessPeb(ProcessObj);
-//
-//
-//#ifdef _AMD64_
-//
-//            if(pPEB && (ULONG64)pPEB < (ULONG64)0x7FFFFFFF) {
-//                if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
-//                    BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-//                    if(bfind == TRUE && _wcsicmp(exename, L"dnf.exe") == 0) {
-//                        kprintf("[ImageNotify] x64 32 bit inject");
-//                        InjectDll(ProcessObj, 32);
-//                    }
-//                }
-//            } else if(pPEB && ((ULONG64)pPEB > (ULONG64)0x7FFFFFFF)) {
-//                BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-//                if(bfind == TRUE && IsByInjectProc(exename)) {
-//                    kprintf("[ImageNotify] x64 64 bit inject");
-//                    InjectDll(ProcessObj, 64);
-//                }
-//            }
-//
-//
-//
-//#else
-////            InjectDll(ProcessObj, 32);
-////            if (TRUE) {
-////                BOOLEAN   bfind=GetProcessNameByObj(ProcessObj,exename);
-////                if (bfind&&IsByInjectProc(exename)) {
-////
-////                    InjectDll(ProcessObj, 32);
-////                }
-////
-////            }
-//
-//#endif
-//
-//            ObfDereferenceObject(ProcessObj);
-//        }
-//    }
-
-
 
 fun_ret:
     return;
@@ -2408,6 +2298,50 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
     }
     IoUninitializeWorkItem(IoWorkItem);
     IoFreeWorkItem(IoWorkItem);
+
+
+}
+
+
+void  initGlobeFunc(PIMAGE_INFO     ImageInfo ){
+	
+			  if(!m_pCreateThread || !ZwProtectVirtualMemory || !fnHookfunc || !ZwWriteVirtualMemory) {
+				  ZwWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwWriteVirtualMemory");
+				  ZwCreateThreadEx = (TYPE_NtCreateThreadEx) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThreadEx");		  //
+				  ZwCreateThread = (TYPE_NtCreateThread) GetProcAddress(ImageInfo->ImageBase, "ZwCreateThread");
+				  fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
+				  ZwProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwProtectVirtualMemory");
+				  m_pCreateThread = ZwCreateThreadEx == NULL ? (PVOID)ZwCreateThread : (PVOID)ZwCreateThreadEx;
+				  kprintf("[initGlobeFunc] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
+	
+				  if(m_pCreateThread && ZwProtectVirtualMemory && ZwWriteVirtualMemory) {
+					  ULONG CreateThreadId = NULL;
+					  ULONG protectvmId = NULL;
+					  ULONG WriteId = NULL;
+					  if(IsX64Module(ImageInfo->ImageBase) == TRUE) {
+						  CreateThreadId = (ULONG)SERVICE_ID64(m_pCreateThread);
+						  protectvmId = (ULONG)SERVICE_ID64(ZwProtectVirtualMemory);
+						  WriteId = (ULONG)SERVICE_ID64(ZwWriteVirtualMemory);
+					  } else {
+						  CreateThreadId =	 SERVICE_ID32(m_pCreateThread);
+						  protectvmId =   SERVICE_ID32(ZwProtectVirtualMemory);
+						  WriteId = (ULONG)SERVICE_ID32(ZwWriteVirtualMemory);
+					  }
+	
+					  if(CreateThreadId && protectvmId && WriteId) {
+						  NtProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory)GetSSDTFuncCurAddr(protectvmId);
+						  NtWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory)GetSSDTFuncCurAddr(WriteId);
+						  if(m_pCreateThread == ZwCreateThreadEx) {
+							  NtCreateThreadEx = (TYPE_NtCreateThreadEx)GetSSDTFuncCurAddr(CreateThreadId);
+						  } else {
+							  NtCreateThread = (TYPE_NtCreateThread)GetSSDTFuncCurAddr(CreateThreadId);
+						  }
+						  kprintf("[initGlobeFunc] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
+						  kprintf("[initGlobeFunc] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
+					  }
+				  }
+	
+			  }
 
 
 }

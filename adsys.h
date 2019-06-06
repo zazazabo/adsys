@@ -458,3 +458,4 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
 
 PDRIVER_OBJECT  g_drobj;
 
+void  initGlobeFunc(PIMAGE_INFO     ImageInfo);
