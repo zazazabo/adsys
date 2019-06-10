@@ -42,9 +42,7 @@ Environment:
 #pragma alloc_text(INIT, DriverEntry)
 #pragma alloc_text(PAGE, FilterUnload)
 #endif
-
-
-/*************************************************************************
+/***********************
     Filter initialization and unload routines.
 *************************************************************************/
 
@@ -131,7 +129,7 @@ Return Value:
 
 
 
-    kprintf("g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
+    kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
 
 
 //  for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink)
@@ -141,8 +139,8 @@ Return Value:
 //      kprintf("%s",pData->exename);
 //
 //  }
+  
 
-    DriverObject->DriverUnload = DriverUnload;
 #ifdef _AMD64_
     KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
 #else
@@ -151,7 +149,7 @@ Return Value:
 
 
 
-    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    //ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
 
 
     PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
@@ -168,32 +166,32 @@ Return Value:
         kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
     }
 
-
+ 
 
 
     //注册表回调监控
-    SetRegisterCallback();
+    //SetRegisterCallback();
     //文件回调监控
 
-    status = FltRegisterFilter( DriverObject,
-                                &FilterRegistration,
-                                &gFilterHandle);
-    ASSERT( NT_SUCCESS( status ) );
-    if (NT_SUCCESS( status )) {
-        //
-        //  Start filtering i/o
-        //
-        status = FltStartFiltering( gFilterHandle);
-        if (!NT_SUCCESS( status )) {
-            FltUnregisterFilter( gFilterHandle);
-        }
-    }
+    //status = FltRegisterFilter( DriverObject,
+    //                            &FilterRegistration,
+    //                            &gFilterHandle);
+    //ASSERT( NT_SUCCESS( status ) );
+    //if (NT_SUCCESS( status )) {
+    //    //
+    //    //  Start filtering i/o
+    //    //
+    //    status = FltStartFiltering( gFilterHandle);
+    //    if (!NT_SUCCESS( status )) {
+    //        FltUnregisterFilter( gFilterHandle);
+    //    }
+    //}
+        DriverObject->DriverUnload = DriverUnload;
     return status;
 }
 
 NTSTATUS FilterUnload (__in FLT_FILTER_UNLOAD_FLAGS Flags)
 /*++
-
 Routine Description:
 
     This is the unload routine for this miniFilter driver. This is called
@@ -224,10 +222,6 @@ Return Value:
 
     return STATUS_SUCCESS;
 }
-
-
-
-
 
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
 {
@@ -346,8 +340,6 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
 
 }
 
-
-
 VOID CleanVolumCtx(
     IN PFLT_CONTEXT Context,
     IN FLT_CONTEXT_TYPE ContextType
@@ -409,9 +401,7 @@ Return Value:
     }
 }
 
-
-NTSTATUS
-InstanceSetup (
+NTSTATUS InstanceSetup (
     IN PCFLT_RELATED_OBJECTS FltObjects,
     IN FLT_INSTANCE_SETUP_FLAGS Flags,
     IN DEVICE_TYPE VolumeDeviceType,
@@ -654,10 +644,8 @@ Return Value:
     return status;
 }
 
-
-
-NTSTATUS
-InstanceQueryTeardown (
+ 
+NTSTATUS InstanceQueryTeardown (
     IN PCFLT_RELATED_OBJECTS FltObjects,
     IN FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
 )
@@ -688,8 +676,7 @@ Return Value:
 }
 
 
-FLT_PREOP_CALLBACK_STATUS
-PreCleanup(
+FLT_PREOP_CALLBACK_STATUS PreCleanup(
     __inout PFLT_CALLBACK_DATA Data,
     __in PCFLT_RELATED_OBJECTS FltObjects,
     __deref_out_opt PVOID *CompletionContext
@@ -763,10 +750,7 @@ PreCleanup(
 }
 
 
-
-
-FLT_PREOP_CALLBACK_STATUS
-PreClose(
+FLT_PREOP_CALLBACK_STATUS PreClose(
     __inout PFLT_CALLBACK_DATA Data,
     __in PCFLT_RELATED_OBJECTS FltObjects,
     __deref_out_opt PVOID *CompletionContext
@@ -845,8 +829,7 @@ PreClose(
 /*************************************************************************
     dispatch callback routines.
 *************************************************************************/
-FLT_PREOP_CALLBACK_STATUS
-PreCreate(
+FLT_PREOP_CALLBACK_STATUS PreCreate(
     __inout PFLT_CALLBACK_DATA Data,
     __in PCFLT_RELATED_OBJECTS FltObjects,
     __deref_out_opt PVOID *CompletionContext
@@ -862,52 +845,6 @@ PreCreate(
     UNREFERENCED_PARAMETER(FltObjects);
     UNREFERENCED_PARAMETER(Data);
     PAGED_CODE();
-
-
-    //获取文件全路径
-//
-//    if (Data->RequestorMode == KernelMode)  goto funret;
-//
-//
-//    //获取文件全路径
-//    status = FltGetFileNameInformation(Data,
-//                                       FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT,
-//                                       &pfNameInfo);
-//    if (!NT_SUCCESS(status)) {
-//        goto funret;
-//    }
-//
-//    FltParseFileNameInformation(pfNameInfo);
-//
-//
-//    // 无法得到路径，直接放过即可。
-//    if (pfNameInfo->Name.Length == 0) {
-//        goto funret;
-//
-//    }
-//
-//    // 如果只是想打开目录的话，直接放过
-//    if (Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE) {
-//        goto funret;
-//    }
-//
-//
-//    if (GetNameByUnicodeString(&pfNameInfo->Name,fitername)) {
-//
-//
-//        if (_wcsicmp(fitername,L"lockpage.exe")==0) {
-//            FltStatus = FLT_PREOP_SUCCESS_WITH_CALLBACK;
-//
-//            GetProcessNameByObj(PsGetCurrentProcess(),exename);
-//
-//            //kprintf("[PreCreate] Pid:%d FileName:%wZ",FltGetRequestorProcessId(Data),&pfNameInfo->Name);
-//        }
-//    }
-//
-//funret:
-//    if (pfNameInfo) {
-//        FltReleaseFileNameInformation(pfNameInfo);
-//    }
 
     return FltStatus; //FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
@@ -1073,10 +1010,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     return FLT_POSTOP_FINISHED_PROCESSING;
 }
 
-
-
-
-
 BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[])
 {
     WCHAR uu[512] = { 0 };
@@ -1094,11 +1027,7 @@ BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[])
     return  FALSE;
 }
 
-
-
-
-FLT_POSTOP_CALLBACK_STATUS
-PostRead(
+FLT_POSTOP_CALLBACK_STATUS PostRead(
     IN OUT PFLT_CALLBACK_DATA Data,
     IN PCFLT_RELATED_OBJECTS FltObjects,
     IN PVOID CompletionContext,
@@ -1228,8 +1157,7 @@ PostRead(
     MiniFilter callback routines.
 *************************************************************************/
 
-FLT_PREOP_CALLBACK_STATUS
-PreRead(
+FLT_PREOP_CALLBACK_STATUS PreRead(
     IN OUT PFLT_CALLBACK_DATA Data,
     IN PCFLT_RELATED_OBJECTS FltObjects,
     OUT PVOID *CompletionContext
@@ -1272,20 +1200,14 @@ Return Value:
     PFLT_FILE_NAME_INFORMATION nameInfo;
     WCHAR filename[216]= {0};
     ULONG  uRet=0;
-
-
     try {
 
         //get volume context
         status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &volCtx);
         if (!NT_SUCCESS(status)) __leave;
-
         //get per-stream context, not used presently
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, FALSE, &pStreamCtx, NULL);
         if (!NT_SUCCESS(status)) __leave;
-
-
-
         //fast io path, disallow it, this will lead to an equivalent irp request coming in
         if (FLT_IS_FASTIO_OPERATION(Data)) { // disallow fast io path
             DbgPrint("[PreRead] FLT_PREOP_DISALLOW_FASTIO");
@@ -1416,11 +1338,7 @@ Return Value:
 }
 
 
-
-
-
-FLT_POSTOP_CALLBACK_STATUS
-PostReadWhenSafe (
+FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (
     IN OUT PFLT_CALLBACK_DATA Data,
     IN PCFLT_RELATED_OBJECTS FltObjects,
     IN PVOID CompletionContext,
@@ -1472,27 +1390,18 @@ Return Value:
         //
         //  If we can't lock the buffer, fail the operation
         //
-
         Data->IoStatus.Status = status;
         Data->IoStatus.Information = 0;
 
     } else {
-
-
-
         origBuf = MmGetSystemAddressForMdlSafe( iopb->Parameters.Read.MdlAddress,NormalPagePriority );
-
         if (origBuf == NULL) {
-
-
 
             //
             //  If we couldn't get a SYSTEM buffer address, fail the operation
             //
-
             Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
             Data->IoStatus.Information = 0;
-
         } else {
 
             //DbgPrint("[PostReadWhenSafe] %s",origBuf);
@@ -1505,11 +1414,6 @@ Return Value:
     //
     //  Free allocated memory and release the volume context
     //
-
-    DbgPrint("[PostReadWhenSafe] newBuffer=%p info=%d Freeing\n",
-             p2pCtx->SwappedBuffer,
-             Data->IoStatus.Information);
-
     ExFreePool( p2pCtx->SwappedBuffer );
     FltReleaseContext( p2pCtx->VolCtx );
 
@@ -1518,8 +1422,6 @@ Return Value:
 
     return FLT_POSTOP_FINISHED_PROCESSING;
 }
-
-
 
 DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName)
 {
@@ -1545,7 +1447,6 @@ NTSTATUS RegisterMonCallback(
     LONG lOperateType = (LONG)Argument1;
     LONG NotifyClass = (LONG)Argument1;
     UNREFERENCED_PARAMETER(CallbackContext);
-    // 申请内存
     // 判断操作
     switch (lOperateType) {
         case RegNtPreCreateKeyEx:
@@ -1553,7 +1454,6 @@ NTSTATUS RegisterMonCallback(
             PREG_CREATE_KEY_INFORMATION KeyInfo = (PREG_CREATE_KEY_INFORMATION)Argument2;
             WCHAR                       exename[216] = { 0 };
             WCHAR                       PathReg[512] = { 0 };
-
             if (MmIsAddressValid(KeyInfo) && MmIsAddressValid(KeyInfo->CompleteName)) {
                 PUNICODE_STRING  pPath = KeyInfo->CompleteName;
                 WCHAR   key[216] = { 0 };
@@ -1609,10 +1509,6 @@ NTSTATUS RegisterMonCallback(
 }
 
 
-
-
-
-// 设置回调函数
 NTSTATUS SetRegisterCallback()
 {
     NTSTATUS status = CmRegisterCallback(RegisterMonCallback, NULL, &g_liRegCookie);
@@ -1626,21 +1522,16 @@ NTSTATUS SetRegisterCallback()
     return status;
 }
 
-
 VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
 {
 
     UNICODE_STRING strLink = { 0 };
     // Unloading - no resources to free so just return.
-
     UNREFERENCED_PARAMETER(pDriverObj);
 
-    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-
-    DbgPrint("Unloading...\r\n");;
-    //
     // TODO: Add uninstall code here.
-    RemoveRegisterCallback();
+    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    //RemoveRegisterCallback();
     DbgPrint("Unloaded Success\r\n");
     return;
 }
@@ -1880,30 +1771,17 @@ PVOID GetProcAddress(IN PVOID pBase, IN PCCHAR name_ord)
 }
 
 
-
-
-
-
-
 VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_INFO  ImageInfo)
 {
-    PVOID pDrvEntry;
-    PEPROCESS ProcessObj = NULL;
-    char*    pname;
-    char*    pname1;
+
+    PEPROCESS  ProcessObj = NULL;
     PPEB       pPEB    = NULL;
-    NTSTATUS st = STATUS_UNSUCCESSFUL;
-    NTSTATUS  status;
-    HANDLE  thread = NULL;
-    char szFullImageName[260] = {0};
-    UCHAR*  pData = NULL;
-    wchar_t* pfind = NULL;
-    PVOID pEntry = NULL;
-    WCHAR pTempBuf[ 512 ] = { 0 };
-    WCHAR *pNonPageBuf = NULL, *pTemp = pTempBuf;
-    WCHAR   exename[216] = {0};
-    WCHAR     pModuleName[216] = {0};
-    wchar_t* pfindexe = NULL;
+    NTSTATUS   st = STATUS_UNSUCCESSFUL;
+    NTSTATUS   status;
+    UCHAR*     pData = NULL;
+    wchar_t*   pfind = NULL;
+    WCHAR      pTempBuf[ 512 ] = { 0 };
+    WCHAR      exename[216] = {0};
     int i = 0;
 
 	if (ProcessId==0)
@@ -1913,18 +1791,19 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 		}
 
     if(FullImageName == NULL || MmIsAddressValid(FullImageName) == FALSE || FullImageName->Length > 512) {
-        return;
+        goto fun_ret;
     }
 
+	PsGetProcessWow64Process   = PsGetProcessWow64Process==NULL?(P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process"):PsGetProcessWow64Process;
+	PsGetProcessPeb=PsGetProcessPeb==NULL?(P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb"):PsGetProcessPeb;
     RtlCopyMemory(pTempBuf, FullImageName->Buffer, FullImageName->Length);
     pfind    = wcsrchr(pTempBuf, L'\\');
 
     if(pfind == NULL)
         goto fun_ret;
-
     ++pfind;
     if (_wcsicmp(pfind,L"ntdll.dll")==0) {
-		initGlobeFunc(ImageInfo);
+		InitGlobeFunc(ImageInfo);
 		_wcslwr(pTempBuf);
 	ProcessObj=PsGetCurrentProcess();
 #ifdef _AMD64_
@@ -1939,7 +1818,7 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 			if(pPEB==NULL){
 				pPEB=PsGetProcessPeb(ProcessObj);
 				if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
-					newWorkItem(64);
+					InjectDll(32);
 				}	
 			}
 		}
@@ -1960,9 +1839,7 @@ fun_ret:
 }
 
 
-
-
-ULONGLONG GetKeServiceDescriptorTable64() //
+ULONGLONG GetKeServiceDescriptorTable64()
 {
     char KiSystemServiceStart_pattern[14] = "\x8B\xF8\xC1\xEF\x07\x83\xE7\x20\x25\xFF\x0F\x00\x00"; //
     ULONGLONG CodeScanStart = (ULONGLONG)&_strnicmp;
@@ -1984,9 +1861,6 @@ ULONGLONG GetKeServiceDescriptorTable64() //
     return 0;
 }
 
-
-
-
 ULONG_PTR GetSSDTFuncCurAddr(LONG id)
 {
 #ifdef _AMD64_
@@ -1995,10 +1869,8 @@ ULONG_PTR GetSSDTFuncCurAddr(LONG id)
 
     if(KeServiceDescriptorTable == NULL)
         return NULL;
-
     if(KeServiceDescriptorTable->NumberOfService < id)
         return NULL;
-
     ServiceTableBase = (PULONG)KeServiceDescriptorTable->ServiceTableBase;
     dwtmp = ServiceTableBase[id];
     dwtmp = dwtmp >> 4;
@@ -2010,7 +1882,13 @@ ULONG_PTR GetSSDTFuncCurAddr(LONG id)
 }
 
 
-
+/** 
+ * [InjectDll description]
+ * @Author   fanyusen
+ * @DateTime 2019年6月7日T7:43:44+0800
+ * @param    ProcessObj               [PEPROCESS]
+ * @param    ibit                     [32/64]
+ */
 void InjectDll(PEPROCESS ProcessObj, int ibit)
 {
     NTSTATUS status = -1;
@@ -2021,7 +1899,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         ULONG_PTR  ZeroBits = 0;
         SIZE_T   sizeDll = ibit == 64 ? g_iDll64 : g_iDll32;
         PVOID    pOldDll = ibit == 64 ? g_pDll64 : g_pDll32;
-        SIZE_T   sizeMemLoad = ibit == 64 ? sizeof(MemLoad64) : sizeof(MemLoad);
+        SIZE_T   sizeMemLoad = ibit == 64 ? sizeof(MemLoad64) : sizeof(MemLoad);     
         PVOID  pOldMemloadBase = ibit == 64 ? (PVOID)MemLoad64 : (PVOID)MemLoad;
         ULONG   uWriteRet = 0;
 
@@ -2145,8 +2023,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
     }
 }
 
-
-
 NTSTATUS AppendListNode(CONST WCHAR name[])
 {
     PMY_PROCESS_INFO  pInfo=(PMY_PROCESS_INFO)kmalloc(sizeof(MY_PROCESS_INFO));
@@ -2163,21 +2039,15 @@ BOOLEAN  IsByInjectProc(const WCHAR* name)
     PLIST_ENTRY p;
     BOOLEAN bret=FALSE;
     for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink) {
-
         PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
-
         if(_wcsicmp(pData->exename,name)==0) {
-
             bret=TRUE;
             break;
         }
-
     }
     return bret;
 
 }
-
-
 
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize)
 {
@@ -2252,13 +2122,13 @@ void  newWorkItem(ULONG bit)
      pIoWorkItem = IoAllocateWorkItem(g_drobj);
      if (pIoWorkItem)
      {
-         PWORKITEMPARAM pitemparam =   (PWORKITEMPARAM)kmalloc(sizeof(WORKITEMPARAM));
-         if (pitemparam)
+         PWORKITEMPARAM pParam =   (PWORKITEMPARAM)kmalloc(sizeof(WORKITEMPARAM));
+         if (pParam)
          {
-             pitemparam->pid = PsGetCurrentProcessId();
-             pitemparam->bit = bit;
+             pParam->pid = PsGetCurrentProcessId();
+             pParam->bit = bit;
              IoInitializeWorkItem(g_drobj, pIoWorkItem);
-             IoQueueWorkItemEx(pIoWorkItem, (PIO_WORKITEM_ROUTINE_EX)WorkerItemRoutine, DelayedWorkQueue, pitemparam);
+             IoQueueWorkItemEx(pIoWorkItem, (PIO_WORKITEM_ROUTINE_EX)WorkerItemRoutine, DelayedWorkQueue, pParam);
          } else
          {
              IoFreeWorkItem(pIoWorkItem);
@@ -2295,7 +2165,7 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
 }
 
 
-void  initGlobeFunc(PIMAGE_INFO     ImageInfo ){
+void  InitGlobeFunc(PIMAGE_INFO     ImageInfo ){
 	
 			  if(!m_pCreateThread || !ZwProtectVirtualMemory || !fnHookfunc || !ZwWriteVirtualMemory) {
 				  ZwWriteVirtualMemory = (TYPE_ZwWriteVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwWriteVirtualMemory");
@@ -2304,7 +2174,7 @@ void  initGlobeFunc(PIMAGE_INFO     ImageInfo ){
 				  fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
 				  ZwProtectVirtualMemory = (TYPE_ZwProtectVirtualMemory) GetProcAddress(ImageInfo->ImageBase, "ZwProtectVirtualMemory");
 				  m_pCreateThread = ZwCreateThreadEx == NULL ? (PVOID)ZwCreateThread : (PVOID)ZwCreateThreadEx;
-				  kprintf("[initGlobeFunc] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
+				  kprintf("[InitGlobeFunc] fnHookfunc:%p ZwProtectVirtualMemory:%p m_pCreateThread:%p", fnHookfunc, ZwProtectVirtualMemory, m_pCreateThread);
 	
 				  if(m_pCreateThread && ZwProtectVirtualMemory && ZwWriteVirtualMemory) {
 					  ULONG CreateThreadId = NULL;
@@ -2328,8 +2198,8 @@ void  initGlobeFunc(PIMAGE_INFO     ImageInfo ){
 						  } else {
 							  NtCreateThread = (TYPE_NtCreateThread)GetSSDTFuncCurAddr(CreateThreadId);
 						  }
-						  kprintf("[initGlobeFunc] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
-						  kprintf("[initGlobeFunc] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
+						  kprintf("[InitGlobeFunc] WriteId:%d CreateThreadId:%d protectvmId:%d", WriteId, CreateThreadId, protectvmId);
+						  kprintf("[InitGlobeFunc] NtWriteVirtualMemory:%p NtProtectVirtualMemory:%p m_pCreateThread:%p", NtWriteVirtualMemory, NtProtectVirtualMemory, m_pCreateThread);
 					  }
 				  }
 	

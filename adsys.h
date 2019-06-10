@@ -406,4 +406,4 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
 VOID IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 
 PDRIVER_OBJECT  g_drobj;
-void  initGlobeFunc(PIMAGE_INFO     ImageInfo);
+void  InitGlobeFunc(PIMAGE_INFO     ImageInfo);

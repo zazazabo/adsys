@@ -566,12 +566,4 @@ NTSTATUS SetFileOffset(
 							
 								FsRtlExitFileSystem() ;
 							}
-
-
-
-
-
-
-
-
 							
