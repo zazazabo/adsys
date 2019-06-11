@@ -80,6 +80,7 @@ Return Value:
 	PKLDR_DATA_TABLE_ENTRY entry=NULL;
 
     UNREFERENCED_PARAMETER( RegistryPath );
+	DriverObject->DriverUnload = DriverUnload;
 
 	g_drobj=DriverObject;
 
@@ -134,7 +135,7 @@ Return Value:
 #endif
 
     kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
-    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+
     PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
     PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
     DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
@@ -150,21 +151,19 @@ Return Value:
     //注册表回调监控
 //    SetRegisterCallback();
     //文件回调监控
+    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    status = FltRegisterFilter( DriverObject,&FilterRegistration,&gFilterHandle);
+    ASSERT( NT_SUCCESS( status ) );
+    if (NT_SUCCESS( status )) {
+        //
+        //  Start filtering i/o
+        //
+        status = FltStartFiltering( gFilterHandle);
+        if (!NT_SUCCESS( status )) {
+            FltUnregisterFilter( gFilterHandle);
+        }
+    }
 
-//    status = FltRegisterFilter( DriverObject,
-//                                &FilterRegistration,
-//                                &gFilterHandle);
-//    ASSERT( NT_SUCCESS( status ) );
-//    if (NT_SUCCESS( status )) {
-//        //
-//        //  Start filtering i/o
-//        //
-//        status = FltStartFiltering( gFilterHandle);
-//        if (!NT_SUCCESS( status )) {
-//            FltUnregisterFilter( gFilterHandle);
-//        }
-//    }
-        DriverObject->DriverUnload = DriverUnload;
     return status;
 }
 
@@ -189,15 +188,14 @@ Return Value:
 {
     UNREFERENCED_PARAMETER( Flags );
 
-    //
+    // 
     //  Unregister from FLT mgr
-    //
-    FltUnregisterFilter( gFilterHandle );
-    //
-    //  Delete lookaside list
-    //
-    ExDeleteNPagedLookasideList( &Pre2PostContextList );
-
+    		FltUnregisterFilter( gFilterHandle );
+    
+	//  Delete lookaside list
+    		ExDeleteNPagedLookasideList( &Pre2PostContextList );
+	kprintf("[FilterUnload] call ExDeleteNPagedLookasideList FltUnregisterFilter");
+	
     return STATUS_SUCCESS;
 }
 
@@ -208,9 +206,9 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
     PsGetProcessPeb==NULL?(P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb"):PsGetProcessPeb;
     pPEB = PsGetProcessPeb != NULL ?    PsGetProcessPeb(ProcessObj) : NULL;
 
+    kprintf("[GetProcessNameByObj] pPEB:%p",pPEB);
     if (pPEB == NULL) return FALSE;
 #ifdef _AMD64_
-
 
     try {
         PPEB64 peb64 = (PPEB64)pPEB;
@@ -227,9 +225,6 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
         if (MmIsAddressValid(processParam) == FALSE || processParam->ImagePathName.Length > 512) {
             return FALSE;
         }
-
-//	   	kprintf("ImagePathName:%wZ",processParam->ImagePathName);
-		
         if (MmIsAddressValid(processParam->ImagePathName.Buffer)) {
 			
             WCHAR *pfind = NULL;
@@ -246,6 +241,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
     }
     __except(EXCEPTION_EXECUTE_HANDLER) {
         ULONG code= GetExceptionCode();
+		kprintf("[GetProcessNameByObj] this is __except");
 
     }
 
@@ -572,21 +568,6 @@ Return Value:
                                       ctx,
                                       NULL );
 
-
-
-        //
-        //  Log debug info
-        //
-
-//        DbgPrint("[InstanceSetup] SectSize=0x%04x, Used SectSize=0x%04x, Name=\"%wZ\"\n",
-//                 volProp->SectorSize,
-//                 ctx->SectorSize,
-//                 &ctx->Name);
-
-        //
-        //  It is OK for the context to already be defined.
-        //
-
         if (status == STATUS_FLT_CONTEXT_ALREADY_DEFINED) {
 
             status = STATUS_SUCCESS;
@@ -837,7 +818,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
     LARGE_INTEGER FileSize = { 0 };
     WCHAR   fitername[256]= {0};
-    WCHAR   exename[216]= {0};
+    WCHAR   exename[512]= {0};
 
     LARGE_INTEGER ByteOffset = { 0 };
     LARGE_INTEGER OrigByteOffset = { 0 };
@@ -870,7 +851,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
         };
 
-        //get volume context锛?remember to release volume context before return
+        //get volume context  remember to release volume context before return
         status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &pVolCtx);
         if (!NT_SUCCESS(status) || (NULL == pVolCtx)) {
 
@@ -882,17 +863,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         if (!NT_SUCCESS(status)) {
             __leave;
         }
-        if (0 == pfNameInfo->Name.Length) { // file name length is zero
-
-            __leave;
-        }
-
-
-
-        if (0 == RtlCompareUnicodeString(&pfNameInfo->Name, &pfNameInfo->Volume, TRUE)) { // if volume name, filter it
-            __leave;
-        }
-
 
         //verify if a directory
         GetFileStandardInfo(Data, FltObjects, NULL, NULL, &bDirectory);
@@ -906,12 +876,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
             __leave;
         }
         uPid=FltGetRequestorProcessId(Data);
-        //DbgPrint("[PostCreate] PID:%d filename:%wZ",uPid,&pfNameInfo->Name);
-
-
-        //create or get stream context of the file
-
-
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, TRUE,
                                                &pStreamCtx, &bNewCreatedOrNot);
         if (!NT_SUCCESS(status)) {
@@ -920,17 +884,15 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
 
         GetProcessNameByObj(PsGetCurrentProcess(),exename);
-        kprintf("[PostCreate] pid:%d exename:%ws",FltGetRequestorProcessId(Data),exename);
+		
+//        kprintf("[PostCreate] pid:%d exename:%ws bNewCreatedOrNot:%d",uPid,exename,bNewCreatedOrNot);
 
-
+		kprintf("[PostCreate] exename:%ws",exename);
 
 
         //update file path name in stream context
         Ctx_UpdateNameInStreamContext(&pfNameInfo->Name, pStreamCtx);
-
         pStreamCtx->FileSize = FileSize;
-
-
         status = GetFileStandardInfo(Data, FltObjects, NULL, &FileSize, NULL);
         if (!NT_SUCCESS(status)) {
             __leave;
@@ -1494,7 +1456,7 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
     // TODO: Add uninstall code here.
 //    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
 //    RemoveRegisterCallback();
-    DbgPrint("Unloaded Success\r\n");
+      DbgPrint("[DriverUnload] Unloaded Success\r\n");
     return;
 }
 
