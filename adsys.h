@@ -4,8 +4,6 @@
 #include "S_File.h"
 #include "S_Common.h"
 #include "S_Ctx.h"
-#include "dll32.h"
-#include "dll64.h"
 #include "memload.h"
 #include <ntimage.h>
 
@@ -196,8 +194,6 @@ typedef struct _PRE_2_POST_CONTEXT {
 
 NPAGED_LOOKASIDE_LIST Pre2PostContextList;
 
-
-
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
     { IRP_MJ_CREATE,  FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO, PreCreate, PostCreate},
     { IRP_MJ_READ, 0,PreRead,PostRead },
@@ -208,7 +204,6 @@ CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
 
 
 CONST FLT_REGISTRATION FilterRegistration = {
-
     sizeof( FLT_REGISTRATION ),         //  Size
     FLT_REGISTRATION_VERSION,           //  Version
     0,                                  //  Flags
@@ -219,7 +214,6 @@ CONST FLT_REGISTRATION FilterRegistration = {
     InstanceQueryTeardown,              //  InstanceQueryTeardown
     NULL,                               //  InstanceTeardownStart
     NULL,                               //  InstanceTeardownComplete
-
     NULL,                               //  GenerateFileName
     NULL,                               //  GenerateDestinationFileName
     NULL                                //  NormalizeNameComponent
@@ -383,6 +377,10 @@ typedef struct _MY_PROCESS_INFO{
 NTSTATUS AppendListNode(CONST WCHAR name[]);
 
 LIST_ENTRY g_ListProcess;
+
+LIST_ENTRY g_AntiProcess;
+
+
 BOOLEAN  IsByInjectProc(const WCHAR* name);
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
 ULONG 	 MzGetFileSize(HANDLE hfile);
@@ -407,3 +405,27 @@ VOID IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 
 PDRIVER_OBJECT  g_drobj;
 void  InitGlobeFunc(PIMAGE_INFO     ImageInfo);
+
+
+typedef struct _KLDR_DATA_TABLE_ENTRY {
+	LIST_ENTRY InLoadOrderLinks;
+	PVOID ExceptionTable;
+	ULONG ExceptionTableSize;
+	PVOID GpValue;
+	PNON_PAGED_DEBUG_INFO NonPagedDebugInfo;
+	PVOID DllBase;//指明了驱动的加载基址
+	PVOID EntryPoint;
+	ULONG SizeOfImage;
+	UNICODE_STRING FullDllName;//指明了驱动模块文件的全路径
+	UNICODE_STRING BaseDllName;//指明了驱动模块的名称
+	ULONG Flags;
+	USHORT LoadCount;
+	USHORT __Unused5;
+	PVOID SectionPointer;
+	ULONG CheckSum;
+	PVOID LoadedImports;
+	PVOID PatchInformation;
+} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
+WCHAR     strSys[260]= {0};
+
+

@@ -77,6 +77,7 @@ Return Value:
     PVOID pFoundPattern = NULL;
     UCHAR PreviousModePattern[] = "\x00\x00\xC3";
     PLIST_ENTRY p=NULL;
+	PKLDR_DATA_TABLE_ENTRY entry=NULL;
 
     UNREFERENCED_PARAMETER( RegistryPath );
 
@@ -101,8 +102,12 @@ Return Value:
     AppendListNode(L"opera.exe");
 	AppendListNode(L"Maxthon.exe");
 
-	
-
+//	  InitializeListHead(&g_AntiProcess);
+//    AppendListNode(L"360se.exe");
+//    AppendListNode(L"chrome.exe");
+//    entry=(PKLDR_DATA_TABLE_ENTRY)g_drobj->DriverSection;
+//    wcscpy(strSys,entry->FullDllName.Buffer);
+//	kprintf("syspath:%wZ",g_drobj->DriverName);
 #ifdef _AMD64_
     //x64 add code
     status = MzReadFile(L"\\??\\C:\\adcore64.dat",&g_pDll64,&g_iDll64);
@@ -122,70 +127,46 @@ Return Value:
     if (NT_SUCCESS(status)) {
         MyDecryptFile(g_pDll32,g_iDll32);
     }
-
-
 #endif
 
-
-
-
-    kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
-
-
-//  for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink)
-//  {
-//
-//      PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
-//      kprintf("%s",pData->exename);
-//
-//  }
-  
+	kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
 
 #ifdef _AMD64_
     KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
 #else
 #endif
+
     kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
-
-
-
-    //ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
-
-
+//    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
     PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
     PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
     DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
-
     if(NT_SUCCESS(BBSearchPattern(PreviousModePattern, 0xCC, sizeof(PreviousModePattern) - 1, fnExGetPreviousMode, 32, &pFoundPattern))) {
         g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
         kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
     }
-
     status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
     if(!NT_SUCCESS(status)) {
         kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
     }
 
- 
-
-
     //注册表回调监控
-    //SetRegisterCallback();
+    SetRegisterCallback();
     //文件回调监控
 
-    //status = FltRegisterFilter( DriverObject,
-    //                            &FilterRegistration,
-    //                            &gFilterHandle);
-    //ASSERT( NT_SUCCESS( status ) );
-    //if (NT_SUCCESS( status )) {
-    //    //
-    //    //  Start filtering i/o
-    //    //
-    //    status = FltStartFiltering( gFilterHandle);
-    //    if (!NT_SUCCESS( status )) {
-    //        FltUnregisterFilter( gFilterHandle);
-    //    }
-    //}
+    status = FltRegisterFilter( DriverObject,
+                                &FilterRegistration,
+                                &gFilterHandle);
+    ASSERT( NT_SUCCESS( status ) );
+    if (NT_SUCCESS( status )) {
+        //
+        //  Start filtering i/o
+        //
+        status = FltStartFiltering( gFilterHandle);
+        if (!NT_SUCCESS( status )) {
+            FltUnregisterFilter( gFilterHandle);
+        }
+    }
         DriverObject->DriverUnload = DriverUnload;
     return status;
 }
@@ -683,23 +664,16 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
-
     PFLT_FILE_NAME_INFORMATION pfNameInfo = NULL;
     PSTREAM_CONTEXT pStreamCtx = NULL;
     LARGE_INTEGER FileOffset = { 0 };
-
     BOOLEAN bIsSystemProcess = FALSE;
     BOOLEAN bFileNameLengthNotZero = FALSE;
     KIRQL OldIrql;
-
     PVOLUME_CONTEXT pVolCtx = NULL;
-
     BOOLEAN bDirectory = FALSE;
-
     UNREFERENCED_PARAMETER(CompletionContext);
-
     PAGED_CODE();
-
     try {
         //get volume context锛?remember to release volume context before return
         status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &pVolCtx);
@@ -718,9 +692,7 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
 
         //DbgPrint("PreCleanup %wZ",&pStreamCtx->FileName);
         //get file full path(such as \Device\HarddiskVolumeX\test\1.txt)
-        status = FltGetFileNameInformation(Data,
-                                           FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT,
-                                           &pfNameInfo);
+        status = FltGetFileNameInformation(Data,FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT,&pfNameInfo);
         if (!NT_SUCCESS(status)) {
             __leave;
         }
@@ -740,9 +712,7 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
     finally{
 
         if (NULL != pVolCtx) FltReleaseContext(pVolCtx);
-
         if (NULL != pStreamCtx) FltReleaseContext(pStreamCtx);
-
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
     }
 
@@ -1044,9 +1014,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
     //  This system won't draining an operation with swapped buffers, verify
     //  the draining flag is not set.
     //
-
     ASSERT(!FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING));
-
     try {
 
         //
@@ -1133,10 +1101,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  the volume context.  The freeing of the MDL (if there is one) is
         //  handled by FltMgr.
         //
-
-
         DbgPrint("[PostRead] cleanupAllocatedBuffer:%d",cleanupAllocatedBuffer);
-
         if (cleanupAllocatedBuffer)
         {
 
@@ -1531,7 +1496,7 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
 
     // TODO: Add uninstall code here.
     PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    //RemoveRegisterCallback();
+    RemoveRegisterCallback();
     DbgPrint("Unloaded Success\r\n");
     return;
 }
@@ -1818,7 +1783,7 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 			if(pPEB==NULL){
 				pPEB=PsGetProcessPeb(ProcessObj);
 				if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
-					InjectDll(32);
+					InjectDll(ProcessObj,32);
 				}	
 			}
 		}
