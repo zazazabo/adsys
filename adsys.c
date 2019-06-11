@@ -151,19 +151,19 @@ Return Value:
 //    SetRegisterCallback();
     //文件回调监控
 
-    status = FltRegisterFilter( DriverObject,
-                                &FilterRegistration,
-                                &gFilterHandle);
-    ASSERT( NT_SUCCESS( status ) );
-    if (NT_SUCCESS( status )) {
-        //
-        //  Start filtering i/o
-        //
-        status = FltStartFiltering( gFilterHandle);
-        if (!NT_SUCCESS( status )) {
-            FltUnregisterFilter( gFilterHandle);
-        }
-    }
+//    status = FltRegisterFilter( DriverObject,
+//                                &FilterRegistration,
+//                                &gFilterHandle);
+//    ASSERT( NT_SUCCESS( status ) );
+//    if (NT_SUCCESS( status )) {
+//        //
+//        //  Start filtering i/o
+//        //
+//        status = FltStartFiltering( gFilterHandle);
+//        if (!NT_SUCCESS( status )) {
+//            FltUnregisterFilter( gFilterHandle);
+//        }
+//    }
         DriverObject->DriverUnload = DriverUnload;
     return status;
 }

@@ -223,14 +223,6 @@ CONST FLT_REGISTRATION FilterRegistration = {
 PFLT_FILTER gFilterHandle;
 
 
-
-
-
-
-
-
-
-
 // ×¢²á±í»Øµ÷Cookie
 LARGE_INTEGER g_liRegCookie;
 NTSTATUS SetRegisterCallback();
