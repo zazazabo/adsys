@@ -104,10 +104,7 @@ Return Value:
 
 //	  InitializeListHead(&g_AntiProcess);
 //    AppendListNode(L"360se.exe");
-//    AppendListNode(L"chrome.exe");
-//    entry=(PKLDR_DATA_TABLE_ENTRY)g_drobj->DriverSection;
-//    wcscpy(strSys,entry->FullDllName.Buffer);
-//	kprintf("syspath:%wZ",g_drobj->DriverName);
+
 #ifdef _AMD64_
     //x64 add code
     status = MzReadFile(L"\\??\\C:\\adcore64.dat",&g_pDll64,&g_iDll64);
@@ -137,7 +134,7 @@ Return Value:
 #endif
 
     kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
-//    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
     PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
     PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
     DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
@@ -145,13 +142,13 @@ Return Value:
         g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
         kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
     }
-    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    if(!NT_SUCCESS(status)) {
-        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
-    }
+//    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+//    if(!NT_SUCCESS(status)) {
+//        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
+//    }
 
     //注册表回调监控
-    SetRegisterCallback();
+//    SetRegisterCallback();
     //文件回调监控
 
     status = FltRegisterFilter( DriverObject,
@@ -1495,8 +1492,8 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
     UNREFERENCED_PARAMETER(pDriverObj);
 
     // TODO: Add uninstall code here.
-    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    RemoveRegisterCallback();
+//    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+//    RemoveRegisterCallback();
     DbgPrint("Unloaded Success\r\n");
     return;
 }
