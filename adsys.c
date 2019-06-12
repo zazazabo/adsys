@@ -193,20 +193,20 @@ Return Value:
     		FltUnregisterFilter( gFilterHandle );
     
 	//  Delete lookaside list
-    		ExDeleteNPagedLookasideList( &Pre2PostContextList );
+    ExDeleteNPagedLookasideList( &Pre2PostContextList );
 	kprintf("[FilterUnload] call ExDeleteNPagedLookasideList FltUnregisterFilter");
 	
     return STATUS_SUCCESS;
 }
 
-BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
+BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR* name)
 {
     PPEB pPEB = NULL;
     UNREFERENCED_PARAMETER(name);
     PsGetProcessPeb==NULL?(P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb"):PsGetProcessPeb;
     pPEB = PsGetProcessPeb != NULL ?    PsGetProcessPeb(ProcessObj) : NULL;
 
-    kprintf("[GetProcessNameByObj] pPEB:%p",pPEB);
+//    kprintf("[GetProcessNameByObj] pPEB:%p",pPEB);
     if (pPEB == NULL) return FALSE;
 #ifdef _AMD64_
 
@@ -229,19 +229,18 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
 			
             WCHAR *pfind = NULL;
 			WCHAR *pexefind=NULL;
-            RtlInitUnicodeString(&pImagePath, processParam->ImagePathName.Buffer);
-            RtlCopyMemory(pexe, (void *)pImagePath.Buffer, pImagePath.Length);
+            RtlCopyMemory(pexe, (void *)processParam->ImagePathName.Buffer, processParam->ImagePathName.Length);
             pfind = wcsrchr(pexe, L'\\');
             if (pfind) {
                 pfind++;
-                wcscpy(name, pfind);
+                wcscpy(name,pfind);
                 return TRUE;
             }
         }
     }
     __except(EXCEPTION_EXECUTE_HANDLER) {
         ULONG code= GetExceptionCode();
-		kprintf("[GetProcessNameByObj] this is __except");
+//		kprintf("[GetProcessNameByObj] this is __except");
 
     }
 
@@ -269,6 +268,8 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[])
         if (MmIsAddressValid(processParam) == FALSE) {
             return FALSE;
         }
+
+
         pImageBuffer=processParam->ImagePathName.Buffer;
         ImageBuffeLen = processParam->ImagePathName.Length;
 
@@ -818,8 +819,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
     LARGE_INTEGER FileSize = { 0 };
     WCHAR   fitername[256]= {0};
-    WCHAR   exename[512]= {0};
-
     LARGE_INTEGER ByteOffset = { 0 };
     LARGE_INTEGER OrigByteOffset = { 0 };
     ULONG      uReadLength = 0;
@@ -830,8 +829,8 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     KIRQL CurrentIrql;
     KIRQL OldIrql;
     ULONG  uPid;
-    PVOID psFileFlag=NULL;
 
+	BOOLEAN   bexename=FALSE;
 
 
 
@@ -845,18 +844,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
     try {
 
-        //  If the Create has failed, do nothing
-        if (!NT_SUCCESS(Data->IoStatus.Status)) {
-            __leave;
-
-        };
-
-        //get volume context  remember to release volume context before return
-        status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &pVolCtx);
-        if (!NT_SUCCESS(status) || (NULL == pVolCtx)) {
-
-            __leave;
-        }
 
         //get file full path(such as \Device\HarddiskVolumeX\test\1.txt)
         status = FltGetFileNameInformation(Data,FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT,&pfNameInfo);
@@ -875,20 +862,11 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
             __leave;
         }
-        uPid=FltGetRequestorProcessId(Data);
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, TRUE,
                                                &pStreamCtx, &bNewCreatedOrNot);
         if (!NT_SUCCESS(status)) {
             __leave;
         }
-
-
-        GetProcessNameByObj(PsGetCurrentProcess(),exename);
-		
-//        kprintf("[PostCreate] pid:%d exename:%ws bNewCreatedOrNot:%d",uPid,exename,bNewCreatedOrNot);
-
-		kprintf("[PostCreate] exename:%ws",exename);
-
 
         //update file path name in stream context
         Ctx_UpdateNameInStreamContext(&pfNameInfo->Name, pStreamCtx);
@@ -929,11 +907,8 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
     }
     finally{
-        if (NULL != pVolCtx)    FltReleaseContext(pVolCtx);
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
         if (NULL != pStreamCtx) FltReleaseContext(pStreamCtx);
-        if (NULL != psFileFlag) ExFreePoolWithTag(psFileFlag, FILEFLAG_POOL_TAG);
-
     }
 
     return FLT_POSTOP_FINISHED_PROCESSING;
@@ -1126,9 +1101,7 @@ Return Value:
     ULONG  uRet=0;
     try {
 
-        //get volume context
-        status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &volCtx);
-        if (!NT_SUCCESS(status)) __leave;
+
         //get per-stream context, not used presently
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, FALSE, &pStreamCtx, NULL);
         if (!NT_SUCCESS(status)) __leave;

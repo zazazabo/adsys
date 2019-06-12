@@ -93,20 +93,12 @@ typedef PPEB(__stdcall *P_PsGetProcessWow64Process)(PEPROCESS);
 P_PsGetProcessWow64Process PsGetProcessWow64Process = NULL;
 typedef PPEB(__stdcall *P_PsGetProcessPeb)(PEPROCESS);
 P_PsGetProcessPeb     PsGetProcessPeb = NULL;
-
 DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName);
-
-
 BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[]);
-
 NTSTATUS DriverEntry (__in PDRIVER_OBJECT DriverObject,__in PUNICODE_STRING RegistryPath);
-
 NTSTATUS FilterUnload ( __in FLT_FILTER_UNLOAD_FLAGS Flags);
-
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[]);
-
 VOID CleanVolumCtx(IN PFLT_CONTEXT Context,IN FLT_CONTEXT_TYPE ContextType);
-
 
 NTSTATUS
 InstanceSetup (
@@ -196,7 +188,7 @@ NPAGED_LOOKASIDE_LIST Pre2PostContextList;
 
 CONST FLT_OPERATION_REGISTRATION Callbacks[] = {
     { IRP_MJ_CREATE,  FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO, PreCreate, PostCreate},
-//    { IRP_MJ_READ, 0,PreRead,PostRead },
+    { IRP_MJ_READ, 0,PreRead,PostRead },
     { IRP_MJ_CLEANUP, FLTFL_OPERATION_REGISTRATION_SKIP_PAGING_IO, PreCleanup,  NULL },
     { IRP_MJ_CLOSE,   0, PreClose,NULL },
     { IRP_MJ_OPERATION_END }
