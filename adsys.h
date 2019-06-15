@@ -364,6 +364,8 @@ LIST_ENTRY g_ListProcess;
 
 LIST_ENTRY g_AntiProcess;
 
+LIST_ENTRY g_AntiFile;
+
 
 BOOLEAN  IsByInjectProc(const WCHAR* name);
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
@@ -375,6 +377,7 @@ ULONG      g_iDll32=0;
 
 void MyDecryptFile(PVOID pdata, int len);
 
+BOOLEAN  IsByProtectFile(const WCHAR* name);
 
 
 typedef struct _WORKITEMPARAM 
