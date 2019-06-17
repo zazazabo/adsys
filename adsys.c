@@ -88,7 +88,7 @@ Return Value:
     PLIST_ENTRY p=NULL;
     PKLDR_DATA_TABLE_ENTRY entry=NULL;
 	int it;
-
+	WCHAR  a[]=L"hehee";
     UNREFERENCED_PARAMETER( RegistryPath );
     DriverObject->DriverUnload = DriverUnload;
 
@@ -113,16 +113,13 @@ Return Value:
     AppendListNode(L"opera.exe");
     AppendListNode(L"Maxthon.exe");
 
-
+	DbgPrint("a:%ws",a);
 	if (1)
 		{
-		WCHAR  uu[216]={0};
-		StringCchPrintfW(uu,L"xxxxx:%d",20);
-
-		DbgPrint("xxxxxx");
-		DbgPrint("%ws",uu);
-
-		
+		CHAR  uu[216]={0};
+		WCHAR  ii=L"cccc";
+		vsprintf(uu,"%ws:%d",ii,20);
+		DbgPrint(uu);
 		}
 
 
