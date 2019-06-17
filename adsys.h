@@ -209,7 +209,7 @@ CONST FLT_REGISTRATION FilterRegistration = {
     NULL,                               //  GenerateFileName
     NULL,                               //  GenerateDestinationFileName
     NULL                                //  NormalizeNameComponent
-
+ 
 };
 
 PFLT_FILTER gFilterHandle;
@@ -353,21 +353,27 @@ typedef struct _PARAMX
 
 ULONG_PTR GetSSDTFuncCurAddr(LONG id);
 
-typedef struct _MY_PROCESS_INFO{
+typedef struct _MY_COMMAND_INFO{
 	LIST_ENTRY Entry;
 	WCHAR    exename[216];
-}MY_PROCESS_INFO, *PMY_PROCESS_INFO;
+	ULONG    uType;
+}MY_COMMAND_INFO, *PMY_COMMAND_INFO;
 	
-NTSTATUS AppendListNode(CONST WCHAR name[]);
+NTSTATUS AppendListNode(CONST WCHAR name[],LIST_ENTRY* link,ULONG uType);
 
 LIST_ENTRY g_ListProcess;
-
 LIST_ENTRY g_AntiProcess;
+LIST_ENTRY g_ProtectFile;
+KSPIN_LOCK g_spin_lockfile; // 自旋锁  文件同步
 
-LIST_ENTRY g_AntiFile;
+KSPIN_LOCK g_spin_process; // 自旋锁  文件同步
 
 
 BOOLEAN  IsByInjectProc(const WCHAR* name);
+
+PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock);
+
+
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
 ULONG 	 MzGetFileSize(HANDLE hfile);
 PVOID      g_pDll64=NULL;

