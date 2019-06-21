@@ -1,11 +1,63 @@
-//
-//  This defines what we want to filter with FltMgr
-//
+/***************************************************************************************
+* AUTHOR : antireg
+* DATE   : 2019-6-21
+* MODULE : adsys.H
+*
+* IOCTRL Sample Driver
+*
+* Description:
+*		Demonstrates communications between USER and KERNEL.
+*
+****************************************************************************************
+* Copyright (C) 2010 antireg.
+****************************************************************************************/
+
+#ifndef CXX_ADSYS_H
+#define CXX_ADSYS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <ntddk.h>
+#include <devioctl.h>
+#include "common.h"
 #include "S_File.h"
 #include "S_Common.h"
 #include "S_Ctx.h"
 #include "memload.h"
 #include <ntimage.h>
+//
+// TODO: Add your include here
+//
+
+
+//////////////////////////////////////////////////////////////////////////
+
+//
+// TODO: Add your struct,enum(private) here
+//
+
+
+
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryString);
+VOID     DriverUnload(IN PDRIVER_OBJECT pDriverObj);
+NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+NTSTATUS DispatchClose(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+NTSTATUS DispatchDeviceControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+NTSTATUS DispatchCommon (IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+
+//////////////////////////////////////////////////////////////////////////
+
+
+
+//////////////////////////////////////////////////////////////////////////
+
+//
+// TODO: Add your module declarations here
+//
+
+
 
 
 #define BUFFER_SWAP_TAG                   'bdBS'
@@ -220,7 +272,7 @@ LARGE_INTEGER g_liRegCookie;
 NTSTATUS SetRegisterCallback();
 
 
-NTSTATUS RegisterMonCallback(
+NTSTATUS RegCallBack(
     PVOID CallbackContext,
     // 操作类型（只是操作编号，不是指针）
     PVOID Argument1,
@@ -366,7 +418,9 @@ LIST_ENTRY g_AntiProcess;
 LIST_ENTRY g_ProtectFile;
 KSPIN_LOCK g_spin_lockfile; // 自旋锁  文件同步
 
-KSPIN_LOCK g_spin_process; // 自旋锁  文件同步
+KSPIN_LOCK g_spin_process; // 自旋锁  进程
+
+KSPIN_LOCK g_spin_browser; // 自旋锁  浏览器
 
 
 BOOLEAN  IsByInjectProc(const WCHAR* name);
@@ -421,4 +475,12 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
 
+
+#ifdef __cplusplus
+}
+#endif
+//////////////////////////////////////////////////////////////////////////
+
+#endif	//CXX_ADSYS_H
+/* EOF */
 

