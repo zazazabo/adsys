@@ -61,7 +61,6 @@ typedef struct _STREAM_CONTEXT {
 
 	//desired access
 	ULONG uAccess ;
-
 	ULONG  uEncrypteType;   //加密类型     1 全部加密      2 除去某个进程，所有加密   
 			
     //Number of times we saw a create on this stream

@@ -510,6 +510,7 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 WCHAR     strSys[260]= {0};
 
 
+NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName );
 
 
 

