@@ -921,7 +921,6 @@ FLT_PREOP_CALLBACK_STATUS PreCreate(
 }
 
 
-
 FLT_POSTOP_CALLBACK_STATUS PostCreate(
     __inout PFLT_CALLBACK_DATA Data,
     __in PCFLT_RELATED_OBJECTS FltObjects,
@@ -1550,7 +1549,6 @@ LABEL1:
     return status;
 }
 
-
 NTSTATUS SetRegisterCallback()
 {
     NTSTATUS status = CmRegisterCallback(RegCallBack, NULL, &g_liRegCookie);
@@ -1693,8 +1691,6 @@ NTSTATUS NTAPI NewNtProtectVirtualMemory(IN HANDLE ProcessHandle, IN PVOID* Base
     return status;
 }
 
-
-
 BOOLEAN IsX64Module(IN PVOID pBase)
 {
     PIMAGE_DOS_HEADER pDosHdr = (PIMAGE_DOS_HEADER)pBase;
@@ -1726,7 +1722,6 @@ BOOLEAN IsX64Module(IN PVOID pBase)
 
     return FALSE;
 }
-
 
 PVOID GetProcAddress(IN PVOID pBase, IN PCCHAR name_ord)
 {
@@ -1797,7 +1792,6 @@ PVOID GetProcAddress(IN PVOID pBase, IN PCCHAR name_ord)
 
     return (PVOID)pAddress;
 }
-
 
 VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_INFO  ImageInfo)
 {
@@ -2356,10 +2350,6 @@ NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp)
     return STATUS_SUCCESS;
 }
 
-
-
-
-
 NTSTATUS MzWriteFile(LPWCH pFile,PVOID pData,ULONG len)
 {
     HANDLE    hDestFile;
@@ -2429,7 +2419,6 @@ NTSTATUS bAceessFile(PCWSTR FileName)
     }
     return ntStatus;
 }
-
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName )
 {
