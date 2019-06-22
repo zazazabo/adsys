@@ -44,8 +44,9 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 VOID     DriverUnload(IN PDRIVER_OBJECT pDriverObj);
 NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
 NTSTATUS DispatchClose(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
-NTSTATUS DispatchDeviceControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
 NTSTATUS DispatchCommon (IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
+NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp);
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -57,6 +58,28 @@ NTSTATUS DispatchCommon (IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
 // TODO: Add your module declarations here
 //
 
+/*************************************************************************
+    Debug tracing information
+*************************************************************************/
+
+//
+//  Definitions to display log messages.  The registry DWORD entry:
+//  "hklm\system\CurrentControlSet\Services\Swapbuffers\DebugFlags" defines
+//  the default state of these logging flags
+//
+
+#define LOGFL_ERRORS    0x00000001  // if set, display error messages
+#define LOGFL_READ      0x00000002  // if set, display READ operation info
+#define LOGFL_WRITE     0x00000004  // if set, display WRITE operation info
+#define LOGFL_DIRCTRL   0x00000008  // if set, display DIRCTRL operation info
+#define LOGFL_VOLCTX    0x00000010  // if set, display VOLCTX operation info
+
+ULONG LoggingFlags = 0;             // all disabled by default
+
+#define LOG_PRINT( _logFlag, _string )                              \
+    (FlagOn(LoggingFlags,(_logFlag)) ?                              \
+        DbgPrint _string  :                                         \
+        ((void)0))
 
 
 
@@ -69,12 +92,21 @@ NTSTATUS DispatchCommon (IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp);
 #define RESOURCE_TAG                      'cRxC'
 #define FILEFLAG_POOL_TAG 'FASV'
 #define MIN_SECTOR_SIZE 0x200
+/*****
+全局变量
+*/
+	PVOID  g_pPlugBuffer;
+	ULONG  g_iPlugSize;
+	WCHAR  g_pPlugPath[216]=L"\\??\\C:\\Windows\\adplug.dll";
+
+
 
 
 #define kprintf     DbgPrint
 #define kmalloc(_s) ExAllocatePoolWithTag(NonPagedPool, _s, 'SYSQ')
 #define kfree(_p)   ExFreePool(_p)
-
+NTSTATUS MzWriteFile(LPWCH pFile,PVOID pData,ULONG len);
+NTSTATUS bAceessFile(PCWSTR FileName);
 
 typedef struct _RTL_USER_PROCESS_PARAMETERS32 {
     ULONG MaximumLength;
@@ -453,6 +485,8 @@ VOID IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 PDRIVER_OBJECT  g_drobj;
 void  InitGlobeFunc(PIMAGE_INFO     ImageInfo);
 
+VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath);
+
 
 typedef struct _KLDR_DATA_TABLE_ENTRY {
 	LIST_ENTRY InLoadOrderLinks;
@@ -474,6 +508,9 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 	PVOID PatchInformation;
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
+
+
+
 
 
 #ifdef __cplusplus

