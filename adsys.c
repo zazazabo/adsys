@@ -1416,7 +1416,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                         LABEL1:
                             bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
-                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
+                             status =    RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
                             }
                         }
                     } else if(_wcsicmp(key, L"adsys") == 0) {
@@ -1425,7 +1425,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                             BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
                                 //kprintf("exename:%ws Path:%wZ",exename,pPath);
-                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files" );
+                             status =   RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files" );
 
                             }
 
