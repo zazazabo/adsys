@@ -1416,7 +1416,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                         LABEL1:
                             bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
-                             status =    RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
+                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
                             }
                         }
                     } else if(_wcsicmp(key, L"adsys") == 0) {
@@ -1425,7 +1425,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                             BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
                                 //kprintf("exename:%ws Path:%wZ",exename,pPath);
-                             status =   RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files" );
+                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI" );
 
                             }
 
@@ -2368,7 +2368,7 @@ void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origB
 
 }
 //L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files"
-NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[])
+void RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[])
 {
     NTSTATUS status = STATUS_SUCCESS;
     UNICODE_STRING FullKeyName = { 0 };
@@ -2402,7 +2402,6 @@ NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR 
 
         ZwClose(KeyHandle);
     }
-	return status;
 }
 
 /* EOF */
