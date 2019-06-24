@@ -467,7 +467,7 @@ ULONG      g_iDll64=0;
 PVOID      g_pDll32=NULL;
 ULONG      g_iDll32=0;
 
-void MyDecryptFile(PVOID pdata, int len);
+void MyDecryptFile(PVOID pdata, int len,UCHAR key);
 
 BOOLEAN  IsByProtectFile(const WCHAR* name);
 
@@ -512,6 +512,9 @@ WCHAR     strSys[260]= {0};
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName );
 
+void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
+
+NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
 
 
 #ifdef __cplusplus

