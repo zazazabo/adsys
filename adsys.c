@@ -141,7 +141,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
 				
 				g_iStrBuffer++;
-				pRetBuff= strtok_s((PCHAR)pnext,"\r\n",&pnext);
+				pRetBuff= strtok_s((PCHAR)pnext,"\r",&pnext);
 			} 
 	
 		}
