@@ -60,17 +60,17 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     PDEVICE_OBJECT pDevObj;
     WCHAR pBrowser[][20] = {L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L""};
     int i = 0;
-    
+
     ReadDriverParameters(pRegistryString);
     pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
     pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
     pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
     // Dispatch routine for communications
     pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchControl;
-    
+
     // Unload routine
     pDriverObj->DriverUnload = DriverUnload;
-    
+
     // Initialize the device name.
     RtlInitUnicodeString(&ustrDevName, NT_DEVICE_NAME);
 
@@ -101,7 +101,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
     // Create a symbolic link to allow USER applications to access it.
     status = IoCreateSymbolicLink(&ustrLinkName, &ustrDevName);
-    
+
     if (!NT_SUCCESS(status))
     {
         dprintf("Error, IoCreateSymbolicLink = 0x%x\r\n", status);
@@ -148,7 +148,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     {
         AppendListNode(g_pStrBuffer[i], &g_ListProcess, 0);
     }
-
 
     //要保护的文件
     InitializeListHead(&g_ProtectFile);
@@ -256,7 +255,7 @@ NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
     pIrp->IoStatus.Information = 0;
 
     IoCompleteRequest(pIrp, IO_NO_INCREMENT);
-    
+
     return STATUS_SUCCESS;
 }
 
@@ -300,7 +299,7 @@ NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
     case IOCTL_HELLO_WORLD:
     {
         dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
-        
+
         // Return success
         status = STATUS_SUCCESS;
     }
@@ -1441,7 +1440,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
     case RegNtPreOpenKeyEx:
     {
         PREG_CREATE_KEY_INFORMATION KeyInfo = (PREG_CREATE_KEY_INFORMATION)Argument2;
-		
+
         WCHAR exename[216] = {0};
         WCHAR PathReg[512] = {0};
         PUNICODE_STRING RootKeyName;
