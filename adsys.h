@@ -430,7 +430,7 @@ typedef struct _PARAMX
   ULONG64 RtlAnsiStringToUnicodeString;
   ULONG64 RtlFreeUnicodeString;
 
-  UCHAR oldcode[20];
+//  UCHAR oldcode[20];
   //unsigned char code1[14] = {0x65, 0x48, 0x8B, 0x04, 0x25, 0x60, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x40, 0x18, 0xC3};
   UCHAR pFunction[100];
 }PARAMX,*PPARAMX;
@@ -458,6 +458,7 @@ KSPIN_LOCK g_spin_browser; // ×ÔÐýËø  ä¯ÀÀÆ÷
 BOOLEAN  IsByInjectProc(const WCHAR* name);
 
 PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock);
+BOOLEAN  FindInBrowser(const WCHAR *name);
 
 
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
@@ -509,17 +510,26 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
 
+BOOLEAN GetRegistryObjectCompleteName(PUNICODE_STRING pRegistryPath, PUNICODE_STRING
+                                      pPartialRegistryPath, PVOID pRegistryObject);
 
-NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName );
+NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName,PUNICODE_STRING pPartialName);
 
 void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
 
 NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
 
 
-WCHAR *g_pStrBuffer[50]={0};
-ULONG  g_iStrBuffer=0;
 
+
+WCHAR *g_HexConfig[50];
+ULONG g_iConfig = 0;
+WCHAR *g_HexBrowser[20][50];
+
+
+ULONG g_iBrowser = 0;
+
+void InitAllStr();
 
 
 
