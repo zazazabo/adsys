@@ -359,6 +359,11 @@ TYPE_ZwWriteVirtualMemory ZwWriteVirtualMemory = NULL;
 PVOID     fnHookfunc = NULL;
 ULONG    g_mode = 0;
 
+PVOID   LdrGetProcAddress
+
+
+
+
 
 NTSTATUS BBSearchPattern(IN PUCHAR pattern, IN UCHAR wildcard, IN ULONG_PTR len, IN const VOID* base, IN ULONG_PTR size, OUT PVOID* ppFound);
 NTSTATUS NTAPI NewNtWriteVirtualMemory(IN HANDLE ProcessHandle, IN PVOID BaseAddress, IN PVOID Buffer,
@@ -449,16 +454,10 @@ LIST_ENTRY g_ListProcess;
 LIST_ENTRY g_AntiProcess;
 LIST_ENTRY g_ProtectFile;
 KSPIN_LOCK g_spin_lockfile; // 自旋锁  文件同步
-
-KSPIN_LOCK g_spin_process; // 自旋锁  进程
-
-KSPIN_LOCK g_spin_browser; // 自旋锁  浏览器
-
-
-BOOLEAN  IsByInjectProc(const WCHAR* name);
+KSPIN_LOCK g_spin_process; 	// 自旋锁  进程
 
 PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock);
-BOOLEAN  FindInBrowser(const WCHAR *name);
+BOOLEAN  		  FindInBrowser(const WCHAR *name);
 
 
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
@@ -479,13 +478,13 @@ typedef struct _WORKITEMPARAM
     ULONG bit;
 } WORKITEMPARAM, * PWORKITEMPARAM;
  
-void  newWorkItem(ULONG bit);
-VOID WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
-VOID IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
+void  	newWorkItem(ULONG bit);
+VOID 	WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
+VOID 	IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 
 PDRIVER_OBJECT  g_drobj;
-void  InitGlobeFunc(PIMAGE_INFO     ImageInfo);
 
+void  InitGlobeFunc(PIMAGE_INFO   ImageInfo);
 VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath);
 
 
@@ -510,16 +509,10 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
 
-BOOLEAN GetRegistryObjectCompleteName(PUNICODE_STRING pRegistryPath, PUNICODE_STRING
-                                      pPartialRegistryPath, PVOID pRegistryObject);
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName,PUNICODE_STRING pPartialName);
-
-void EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
-
+void 	 EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
 NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
-
-
 
 
 WCHAR *g_HexConfig[50];

