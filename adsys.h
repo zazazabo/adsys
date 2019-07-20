@@ -26,6 +26,7 @@ extern "C" {
 #include "S_Common.h"
 #include "S_Ctx.h"
 #include "memload.h"
+#include "disasm.h"
 #include <ntimage.h>
 //
 // TODO: Add your include here
@@ -72,11 +73,11 @@ NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp);
 #define LOGFL_READ      0x00000002  // if set, display READ operation info
 #define LOGFL_WRITE     0x00000004  // if set, display WRITE operation info
 #define LOGFL_DIRCTRL   0x00000008  // if set, display DIRCTRL operation info
-#define LOGFL_VOLCTX    0x00000010  // if set, display VOLCTX operation info
+#define LOGFL_INFO    0x00000010  // if set, display VOLCTX operation info
 
 ULONG LoggingFlags = 0;             // all disabled by default
 
-#define LOG_PRINT( _logFlag, _string )                              \
+#define LOG( _logFlag, _string )                              \
     (FlagOn(LoggingFlags,(_logFlag)) ?                              \
         DbgPrint _string  :                                         \
         ((void)0))
@@ -182,6 +183,9 @@ BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[]);
 NTSTATUS DriverEntry (__in PDRIVER_OBJECT DriverObject,__in PUNICODE_STRING RegistryPath);
 NTSTATUS FilterUnload ( __in FLT_FILTER_UNLOAD_FLAGS Flags);
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[]);
+
+
+
 VOID CleanVolumCtx(IN PFLT_CONTEXT Context,IN FLT_CONTEXT_TYPE ContextType);
 
 NTSTATUS
@@ -353,17 +357,18 @@ TYPE_ZwWriteVirtualMemory ZwWriteVirtualMemory = NULL;
 
 
 
+//ZwTestAlert
 
-
-#define   HOOKADDR     "ZwCreateFile"
+#define   HOOKADDR    "ZwContinue" //"ZwCreateFile"  ZwContinue  ZwCreateFile
 PVOID     fnHookfunc = NULL;
+PVOID64		fnHookfunc64=NULL;
+
 ULONG    g_mode = 0;
 
-PVOID   LdrGetProcAddress
+PVOID   LdrGetProcAddress32=NULL;
+PVOID   LdrGetProcAddress64=NULL;
 
-
-
-
+ 
 
 NTSTATUS BBSearchPattern(IN PUCHAR pattern, IN UCHAR wildcard, IN ULONG_PTR len, IN const VOID* base, IN ULONG_PTR size, OUT PVOID* ppFound);
 NTSTATUS NTAPI NewNtWriteVirtualMemory(IN HANDLE ProcessHandle, IN PVOID BaseAddress, IN PVOID Buffer,
@@ -417,7 +422,6 @@ __declspec(dllimport) ServiceDescriptorTableEntry_t    KeServiceDescriptorTable;
 
 #define   SERVICE_ID64(_function)     (*(PULONG)((PUCHAR)_function + 4))  //64位进程
 #define   SERVICE_ID32(_function)     (*(PULONG)((PUCHAR)_function + 1))  //32位进程
-
 
 #define SERVICE_FUNCTION(_function)   \
   ((ULONG)(KeServiceDescriptorTable.ServiceTableBase) + 4*SERVICE_ID32(_function))
@@ -523,6 +527,14 @@ WCHAR *g_HexBrowser[20][50];
 ULONG g_iBrowser = 0;
 
 void InitAllStr();
+
+
+
+ULONG GetPatchSize(PUCHAR Address,int asmlen);
+typedef int (*LDE_DISASM)(void *p, int dw);
+LDE_DISASM LDE;
+void LDE_init();
+
 
 
 

@@ -10,5 +10,6 @@ SOURCES=adsys.c \
         adsys.rc\
         S_Ctx.c \
         S_File.c \
+        disasm.c\
 
 
