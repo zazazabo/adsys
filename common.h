@@ -60,6 +60,7 @@
 #define IOCTRL_REC_FROM_APP          MY_CTL_CODE(1)
 #define IOCTRL_SEND_TO_APP           MY_CTL_CODE(2)
 
+#define IOCTRL_DEBUG         				 MY_CTL_CODE(3)
 
 //
 // TODO: Add your IOCTL define here

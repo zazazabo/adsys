@@ -201,7 +201,7 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObj)
 
     // Delete the DeviceObject
     IoDeleteDevice(pDriverObj->DeviceObject);
-
+    
     dprintf("Unloaded Success\r\n");
 
     return;
@@ -255,11 +255,13 @@ NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
     switch (uIoControlCode) {
         case IOCTL_HELLO_WORLD: {
             dprintf("MY_CTL_CODE(0)=%d\r\n,MY_CTL_CODE");
-
             // Return success
             status = STATUS_SUCCESS;
         }
         break;
+        case IOCTRL_DEBUG:
+            LoggingFlags = pIoBuffer;
+            break;
 
         //
         // TODO: Add execute code here.
@@ -1773,6 +1775,7 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         PUCHAR pCall = NULL;
         PUCHAR    origincode = NULL;
         PUCHAR    restorcode = NULL;
+        memcpy(param.pFunction, b1, sizeof(b1));
 
         status = ObOpenObjectByPointer(ProcessObj, OBJ_KERNEL_HANDLE, NULL, PROCESS_ALL_ACCESS, NULL, KernelMode, &ProcessHandle);
         if (!NT_SUCCESS(status)) {
@@ -1785,10 +1788,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
             kprintf("[InjectDll] status:%x", status);
             goto HHHH;
         }
-
-        //kprintf("[InjectDll] dllbase:%p", dllbase);
-
-        RtlZeroMemory(&param, sizeof(PARAMX));
 
         status = ZwAllocateVirtualMemory(ProcessHandle, &MemloadBase, ZeroBits, &sizeMemloadAll, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 
@@ -1809,7 +1808,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         param.lpFileData = (ULONG64)dllbase;
         param.DataLength = dllsize;
 
-        memcpy(param.pFunction, b1, sizeof(b1));
         //写入memload
         status = NewNtWriteVirtualMemory(ProcessHandle, MemloadBase, pOldMemloadBase, sizeMemLoad, &uWriteRet);
 
@@ -2155,6 +2153,11 @@ void InitGlobeFunc(PIMAGE_INFO ImageInfo)
     if (!fnHookfunc64) {
         if (IsX64Module(ImageInfo->ImageBase)) {
             fnHookfunc64 = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
+            if (fnHookfunc64) {
+                memcpy(pOldCode64,fnHookfunc64,20);
+            }
+
+
             kprintf("[InitGlobeFunc] fnHookfunc64:%p", fnHookfunc64);
         }
 
@@ -2164,6 +2167,10 @@ void InitGlobeFunc(PIMAGE_INFO ImageInfo)
     if (!fnHookfunc) {
         if (!IsX64Module(ImageInfo->ImageBase)) {
             fnHookfunc = GetProcAddress(ImageInfo->ImageBase, HOOKADDR);
+            if (fnHookfunc) {
+                memcpy(pOldCode32,fnHookfunc,20);
+            }
+
             kprintf("[InitGlobeFunc] fnHookfunc32:%p", fnHookfunc);
         }
     }
@@ -2476,11 +2483,6 @@ void InitAllStr()
 
     NTSTATUS status;
     MyDecryptFile(hexBrowser, sizeof(hexBrowser), 0xb);
-
-
-
-
-
     if (TRUE) {
         CHAR *pnext = (CHAR *)hexBrowser;
         CHAR *pRetBuff = NULL;
@@ -2638,11 +2640,7 @@ char *myStrtok_r(char* string_org,const char* demial, char **save_ptr)
         }
         break;
     }
-
-
     string_org = str;
-
-
     //查找第一个分隔符
     while (*str) {
         if (isContained(map, *str)) {
