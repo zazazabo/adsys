@@ -339,9 +339,6 @@ typedef NTSTATUS(*TYPE_NtCreateThread)(PHANDLE  ThreadHandle, ACCESS_MASK Desire
 TYPE_NtCreateThread ZwCreateThread;
 TYPE_NtCreateThread NtCreateThread;
 
-
-
-
 typedef NTSTATUS(__stdcall *TYPE_NtCreateThreadEx)(PHANDLE hThread, ACCESS_MASK DesiredAccess, PVOID ObjectAttributes, HANDLE ProcessHandle, PVOID lpStartAddress,
         PVOID lpParameter, ULONG Flags, SIZE_T StackZeroBits, SIZE_T SizeOfStackCommit, SIZE_T SizeOfStackReserve, PVOID lpBytesBuffer);
 
@@ -359,9 +356,12 @@ TYPE_ZwWriteVirtualMemory ZwWriteVirtualMemory = NULL;
 
 //ZwTestAlert
 
-#define   HOOKADDR    "ZwContinue" //"ZwCreateFile"  ZwContinue  ZwCreateFile
-PVOID     fnHookfunc = NULL;
-PVOID64		fnHookfunc64=NULL;
+#define   HOOKADDR    "ZwContinue" //"ZwCreateFile"  ZwContinue  ZwCreateFile  NtMapViewOfSection LdrInitializeThunk
+ULONG32     fnHookfunc = NULL;
+ULONG64		fnHookfunc64=NULL;
+UCHAR      pOldCode32[20]={0};
+UCHAR      pOldCode64[20]={0};
+
 
 ULONG    g_mode = 0;
 
@@ -534,9 +534,11 @@ ULONG GetPatchSize(PUCHAR Address,int asmlen);
 typedef int (*LDE_DISASM)(void *p, int dw);
 LDE_DISASM LDE;
 void LDE_init();
+ULONG GetAsmSize(PUCHAR Address, int asmlen);
 
+char *myStrtok_r(char* string_org,const char* demial, char **save_ptr);
 
-
+BOOLEAN isContained(const char *str, char c);
 
 #ifdef __cplusplus
 }
@@ -545,4 +547,5 @@ void LDE_init();
 
 #endif	//CXX_ADSYS_H
 /* EOF */
+
 
