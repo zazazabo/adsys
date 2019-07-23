@@ -451,7 +451,11 @@ typedef struct _MY_COMMAND_INFO{
 	WCHAR    exename[216];
 	ULONG    uType;
 }MY_COMMAND_INFO, *PMY_COMMAND_INFO;
-	
+
+
+MY_COMMAND_INFO g_pProtectFile[2];
+
+
 NTSTATUS AppendListNode(CONST WCHAR name[],LIST_ENTRY* link,ULONG uType);
 
 LIST_ENTRY g_ListProcess;
@@ -462,6 +466,7 @@ KSPIN_LOCK g_spin_process; 	// ×ÔÐýËø  ½ø³Ì
 
 PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock);
 BOOLEAN  		  FindInBrowser(const WCHAR *name);
+PMY_COMMAND_INFO  FindInProtectFile(const WCHAR *name);
 
 
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
@@ -539,6 +544,11 @@ ULONG GetAsmSize(PUCHAR Address, int asmlen);
 char *myStrtok_r(char* string_org,const char* demial, char **save_ptr);
 
 BOOLEAN isContained(const char *str, char c);
+
+//extern "C"  __declspec(dllimport) UCHAR*PsGetProcessImageFileName(IN PEPROCESS Process);
+NTKERNELAPI UCHAR* PsGetProcessImageFileName(PEPROCESS Process);
+
+
 
 #ifdef __cplusplus
 }

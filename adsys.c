@@ -116,10 +116,20 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
 
     //要保护的文件
-    InitializeListHead(&g_ProtectFile);
-    KeInitializeSpinLock(&g_spin_lockfile);
-    AppendListNode(g_HexConfig[0], &g_ProtectFile, 2);
-    AppendListNode(g_HexConfig[1], &g_ProtectFile, 1);
+//    InitializeListHead(&g_ProtectFile);
+//    KeInitializeSpinLock(&g_spin_lockfile);
+//    AppendListNode(g_HexConfig[0], &g_ProtectFile, 2);
+//    AppendListNode(g_HexConfig[1], &g_ProtectFile, 1);
+
+
+	wcscpy(g_pProtectFile[0].exename,g_HexConfig[0]);
+	g_pProtectFile[0].uType=2;
+	
+  	wcscpy(g_pProtectFile[1].exename,g_HexConfig[1]);
+	g_pProtectFile[1].uType=1;  
+
+
+//	kprintf("[DriverEntry] g_pProtectFile size:%d",sizeof(g_pProtectFile));
     //不让访问的进程名
 
 #ifdef _AMD64_
@@ -138,7 +148,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     //x86 add code
     status = MzReadFile(g_HexConfig[3], &g_pDll32, &g_iDll32);
     if (NT_SUCCESS(status)) {
-        //MyDecryptFile(g_pDll32, g_iDll32, 16);
+        MyDecryptFile(g_pDll32, g_iDll32, 16);
     } else kprintf("[DriverEntry] File:%ws Error status:%x", g_HexConfig[3], status);
 #endif
 
@@ -157,6 +167,8 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
         g_mode = *(PULONG)((PUCHAR)pFoundPattern - 2);
         kprintf("[DriverEntry] g_mode:%x fnExGetPreviousMode:%p\n", g_mode, fnExGetPreviousMode);
     }
+
+	kprintf("[DriverEntry] PsGetProcessImageFileName:%p",PsGetProcessImageFileName);
 
     // 映像加载回调
     status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
@@ -260,7 +272,16 @@ NTSTATUS DispatchControl(IN PDEVICE_OBJECT pDevObj, IN PIRP pIrp)
         }
         break;
         case IOCTRL_DEBUG:
-            LoggingFlags = pIoBuffer;
+        	{
+        		int* pFlag=pIoBuffer;
+				if (MmIsAddressValid(pFlag))
+					{
+							 kprintf("[DispatchControl] ...%d uInSize:%d",*pFlag,uInSize);
+							   LoggingFlags = *pFlag;
+           		
+					}
+				
+			}
             break;
 
         //
@@ -328,12 +349,12 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
         UNICODE_STRING tempcommand = { 0 };
         PRTL_USER_PROCESS_PARAMETERS64 processParam = (PRTL_USER_PROCESS_PARAMETERS64)peb64->ProcessParameters;
 //      kprintf("[GetCommandLine] CommandLine Length:%d %ws",processParam->CommandLine.Length,processParam->CommandLine.Buffer);
-        if (MmIsAddressValid(processParam) == FALSE || processParam->CommandLine.Length > 1024) {
+        if (MmIsAddressValid(processParam) == FALSE || processParam->CommandLine.Length > 2048) {
             return FALSE;
         }
         if (MmIsAddressValid(processParam->CommandLine.Buffer)) {
-
-            RtlCopyMemory(name, processParam->CommandLine.Buffer, processParam->CommandLine.Length);
+			int Len=processParam->CommandLine.Length>=1024?1023:processParam->CommandLine.Length;
+            RtlCopyMemory(name, processParam->CommandLine.Buffer,Len);
             return TRUE;
         }
     }
@@ -360,13 +381,14 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
         if (pPEB == NULL) return FALSE;
 
         processParam = (PRTL_USER_PROCESS_PARAMETERS32)peb32->ProcessParameters;
-      kprintf("[GetCommandLine] Length:%d ProcessParameters:%ws", processParam->CommandLine.Length, processParam->CommandLine.Buffer);
-        if (MmIsAddressValid(processParam) == FALSE || processParam->CommandLine.Length > 1024) {
+//      kprintf("[GetCommandLine] Length:%d ProcessParameters:%ws", processParam->CommandLine.Length, processParam->CommandLine.Buffer);
+        if (MmIsAddressValid(processParam) == FALSE || processParam->CommandLine.Length > 2048) {
             return FALSE;
         }
 
         if (MmIsAddressValid(processParam->CommandLine.Buffer)) {
-            RtlCopyMemory(name, processParam->CommandLine.Buffer, processParam->CommandLine.Length);
+			int Len=processParam->CommandLine.Length>=1024?1023:processParam->CommandLine.Length;
+            RtlCopyMemory(name, processParam->CommandLine.Buffer,Len);
             return TRUE;
 
         }
@@ -392,7 +414,15 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 {
     PPEB pPEB = NULL;
-    UNREFERENCED_PARAMETER(name);
+
+	KPROCESSOR_MODE  PreMode = ExGetPreviousMode();
+    if( KeGetCurrentIrql() != PASSIVE_LEVEL ) {
+
+		LOG(LOGFL_INFO,("this is less level"));
+        return FALSE;
+    }
+
+	
     pPEB = PsGetProcessPeb != NULL ? PsGetProcessPeb(ProcessObj) : NULL;
     if (pPEB == NULL) return FALSE;
 #ifdef _AMD64_
@@ -431,7 +461,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
     }
 
 #else
-
+ 
     try {
 
         PPEB32 peb32 = (PPEB32)pPEB;
@@ -897,7 +927,6 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         if (!NT_SUCCESS(status)) {
             __leave;
         }
-
         //verify if a directory
         GetFileStandardInfo(Data, FltObjects, NULL, NULL, &bDirectory);
         if (bDirectory) {
@@ -907,10 +936,15 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
 
         GetNameByUnicodeString(&pfNameInfo->Name, fitername);
 
-        pCmdData = FindInList(fitername, &g_ProtectFile, &g_spin_lockfile);
+		pCmdData=FindInProtectFile(fitername);
         if (pCmdData == NULL) {
             __leave;
         }
+
+
+//		LOG(LOGFL_INFO,("[PostCreate] filename:%ws uType:%d Path:%wZ",pCmdData->exename,pCmdData->uType,&pfNameInfo->Name));
+
+
         status = Ctx_FindOrCreateStreamContext(Data, FltObjects, TRUE,
                                                &pStreamCtx, &bNewCreatedOrNot);
         if (!NT_SUCCESS(status)) {
@@ -926,6 +960,7 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
             pStreamCtx->uAccess = uDesiredAccess;
             SC_UNLOCK(pStreamCtx, OldIrql);
             //            DbgPrint("[PostCreate] has found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
+//            LOG(LOGFL_INFO,("[PostCreate] has     found RefCount:%d filename:%wZ\n",pStreamCtx->RefCount, &pStreamCtx->FileName));
             __leave;
         }
 
@@ -934,8 +969,8 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         pStreamCtx->RefCount++;
         pStreamCtx->uEncrypteType = pCmdData->uType;
         pStreamCtx->uAccess = uDesiredAccess;
-        DbgPrint("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount, &pStreamCtx->FileName);
-        ///pStreamCtx->aes_ctr_ctx = NULL ;
+		LOG(LOGFL_INFO,("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount, &pStreamCtx->FileName));
+        //pStreamCtx->aes_ctr_ctx = NULL ;
         SC_UNLOCK(pStreamCtx, OldIrql);
         //Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
     }
@@ -995,14 +1030,14 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //fast io path, disallow it, this will lead to an equivalent irp request coming in
         if (FLT_IS_FASTIO_OPERATION(Data)) {
             // disallow fast io path
-            //            DbgPrint("[PreRead] FLT_PREOP_DISALLOW_FASTIO");
+			LOG(LOGFL_INFO,("[PreRead] FLT_PREOP_DISALLOW_FASTIO"));
             retValue = FLT_PREOP_DISALLOW_FASTIO;
             __leave;
         }
 
         //cached io irp path
         if (!(Data->Iopb->IrpFlags & (IRP_NOCACHE | IRP_PAGING_IO | IRP_SYNCHRONOUS_PAGING_IO))) {
-            //            DbgPrint("[PreRead] This is Not IRP_NOCACHE IRP_PAGING_IO IRP_SYNCHRONOUS_PAGING_IO:%x",Data->Iopb->IrpFlags);
+            LOG(LOGFL_INFO,("[PreRead] This is Not IRP_NOCACHE IRP_PAGING_IO IRP_SYNCHRONOUS_PAGING_IO:%x",Data->Iopb->IrpFlags));
             __leave;
         }
 
@@ -1073,7 +1108,7 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //  Update the buffer pointers and MDL address, mark we have changed
         //  something.
         //
-        //        DbgPrint("[PreRead]  p2pCtx:%p newBuf:%p newMdl:%p",p2pCtx,newBuf,newMdl);
+		LOG(LOGFL_INFO,("[PreRead]  p2pCtx:%p newBuf:%p newMdl:%p pStreamCtx:%p",p2pCtx,newBuf,newMdl,pStreamCtx));
         iopb->Parameters.Read.ReadBuffer = newBuf;
         iopb->Parameters.Read.MdlAddress = newMdl;
         FltSetCallbackDataDirty(Data);
@@ -1127,8 +1162,9 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
     FLT_POSTOP_CALLBACK_STATUS retValue = FLT_POSTOP_FINISHED_PROCESSING;
     BOOLEAN cleanupAllocatedBuffer = TRUE;
     PPRE_2_POST_CONTEXT p2pCtx = (PPRE_2_POST_CONTEXT)CompletionContext;
+	ULONG pid =	FltGetRequestorProcessId(Data);
 
-    //
+  
     //  This system won't draining an operation with swapped buffers, verify
     //  the draining flag is not set.
     //
@@ -1138,7 +1174,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  If the operation failed or the count is zero, there is no data to
         //  copy so just return now.
         //
-
         if (!NT_SUCCESS(Data->IoStatus.Status) || (Data->IoStatus.Information == 0)) {
             leave;
         }
@@ -1148,7 +1183,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  that the parameters passed in are for the users original buffers
         //  not our swapped buffers.
         //
-
         if (iopb->Parameters.Read.MdlAddress != NULL) {
 
             origBuf = MmGetSystemAddressForMdlSafe(iopb->Parameters.Read.MdlAddress, NormalPagePriority);
@@ -1157,17 +1191,18 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
                 Data->IoStatus.Information = 0;
                 leave;
             }
+
+			LOG(LOGFL_INFO,("[PostRead]  MmGetSystemAddressForMdlSafe Len:%d file:%ws",Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
+
+			
         } else if (FlagOn(Data->Flags, FLTFL_CALLBACK_DATA_SYSTEM_BUFFER) || FlagOn(Data->Flags, FLTFL_CALLBACK_DATA_FAST_IO_OPERATION)) {
             origBuf = iopb->Parameters.Read.ReadBuffer;
+			
+				LOG(LOGFL_INFO,("[PostRead]  FLTFL_CALLBACK_DATA_SYSTEM_BUFFER | FLTFL_CALLBACK_DATA_FAST_IO_OPERATION Len:%d file:%ws",Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
 
         } else {
             if (FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, PostReadWhenSafe, &retValue)) {
-
-                //
-                //  This operation has been moved to a safe IRQL, the called
-                //  routine will do (or has done) the freeing so don't do it
-                //  in our routine.
-                //
+				LOG(LOGFL_INFO,("[PostRead]  call FltDoCompletionProcessingWhenSafe Len:%d file:%ws",Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
                 cleanupAllocatedBuffer = FALSE;
             } else {
                 //                DbgPrint("[PostRead] call else");
@@ -1183,8 +1218,85 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //  so we are in the proper context.  Copy the data handling an
         //  exception.
         //
+		LOG(LOGFL_INFO,("[PostRead] p2pCtx:%p SwappedBuffer:%p pStreamCtx:%p pMdl:%p  Len:%d file:%ws",p2pCtx,p2pCtx->SwappedBuffer,p2pCtx->pStreamCtx,p2pCtx->pMdl,
+							Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
+		try {
 
-        EncodeBuffer(Data, p2pCtx, origBuf);
+			PUCHAR   pOrigBuf=(PUCHAR)origBuf;
+		
+			if (MmIsAddressValid(p2pCtx->SwappedBuffer)) {
+				//除去explorer 全加密
+				if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
+		
+					ULONG i = 0;
+					 LOG(LOGFL_INFO,("[PostRead] encrypte len:%d file:%ws",Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
+					for (i = 0; i < Data->IoStatus.Information; i++) {
+						PUCHAR pByte = (PUCHAR)p2pCtx->SwappedBuffer;
+						pOrigBuf[i] = pByte[i] ^ 0xa;
+					}
+				} 
+				else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
+						WCHAR exename[512] = { 0 };
+						PEPROCESS ProcessObj=NULL;
+						try {
+							if (NT_SUCCESS(PsLookupProcessByProcessId(pid, &ProcessObj))) {
+
+										char* pName= 	PsGetProcessImageFileName(ProcessObj);
+										LOG(LOGFL_INFO,("[PostRead] Pid:%d Exename:%s ",pid,pName));		
+//										if (_stricmp(pName,"explorer.exe")==0||_stricmp(pName,"rundll32.exe")==0)
+//										{
+//												LOG(LOGFL_INFO,("[PostRead] Pid:%d Exename:%s ",pid,pName));		
+//												
+//										}
+
+//							BOOLEAN bgetname = GetProcessNameByObj(ProcessObj, exename);
+//							LOG(LOGFL_INFO,("[PostRead] Pid:%d Exename:%ws ",pid,exename));								
+//
+							if (ProcessObj != NULL)
+								ObfDereferenceObject(ProcessObj);
+								
+							}
+						}
+
+						__except(EXCEPTION_EXECUTE_HANDLER) {
+							ULONG code = GetExceptionCode();
+
+						}
+
+
+						
+
+//							BOOLEAN bgetname = GetProcessNameByObj(PsGetCurrentProcess(), exename);
+//		//					LOG(LOGFL_INFO,("[PostRead] Pid:%d Exename:%ws ",PsGetCurrentProcessId(),exename));
+//							if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
+//								LOG(LOGFL_INFO,("[PostRead] pid1:%d pid:%d exename:%ws filename:%ws",pid,PsGetCurrentProcessId(),exename,p2pCtx->pStreamCtx->FileName.Buffer));
+//								RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
+//							} else {
+//								ULONG i = 0;	
+//								LOG(LOGFL_INFO,("[PostRead] others pid1:%d pid:%d exename:%ws filename:%ws",pid,PsGetCurrentProcessId(),exename,p2pCtx->pStreamCtx->FileName.Buffer));
+//								for (i = 0; i < Data->IoStatus.Information; i++) {
+//									PUCHAR pByte = (PUCHAR)p2pCtx->SwappedBuffer;
+//									pOrigBuf[i] = pByte[i] ^ 0xa;
+//								}
+//							}
+
+
+				}   
+			}
+		}
+		__except(EXCEPTION_EXECUTE_HANDLER) {
+			ULONG code = GetExceptionCode();
+		}
+
+
+
+
+
+
+
+
+
+//        EncodeBuffer(Data, p2pCtx, origBuf);
     }
     finally{
 
@@ -1245,7 +1357,8 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe(IN OUT PFLT_CALLBACK_DATA Data, IN P
             Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
             Data->IoStatus.Information = 0;
         } else {
-            EncodeBuffer(Data, p2pCtx, origBuf);
+			LOG(LOGFL_INFO,("[PostReadWhenSafe] Len:%d file:%ws",Data->IoStatus.Information,p2pCtx->pStreamCtx->FileName.Buffer));
+//            EncodeBuffer(Data, p2pCtx, origBuf);
             //DbgPrint("[PostReadWhenSafe] %s",origBuf);
             //memset( p2pCtx->SwappedBuffer, 0x61, Data->IoStatus.Information);
             //RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
@@ -1325,19 +1438,22 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
                                     BOOLEAN bRedirect = TRUE;
                                     ULONG udesire = KEY_ALL_ACCESS | KEY_WOW64_64KEY;
 
-//                                  kprintf("[RegCallBack] PathReg:%ws exename:%ws",PathReg,exename);
+                               
                                     if (KeyInfo->DesiredAccess == KEY_ALL_ACCESS || KeyInfo->DesiredAccess == udesire) {
                                         if (KeyInfo->GrantedAccess == 0 && KeyInfo->CreateOptions == 0) bRedirect = FALSE;
                                         else bRedirect = TRUE;
                                     } else bRedirect = TRUE;
                                     if (bRedirect == TRUE) {
+										LOG(LOGFL_INFO,("[RegCallBack] exename:%ws",exename));
                                         status = RedirectReg(KeyInfo, NotifyClass, g_HexConfig[6]);
                                     } else {
-                                        kprintf("[RegCallBack] exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
-                                                exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition, KeyInfo->CreateOptions);
-                                        kprintf("[RegCallBack] exename:%ws udesire:%x  KEY_ALL_ACCESS:%x", exename, udesire, KEY_ALL_ACCESS);
+                                        LOG(LOGFL_INFO,("[RegCallBack] exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
+                                                exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition, KeyInfo->CreateOptions));
                                     }
-                                }
+                                }else{
+										LOG(LOGFL_INFO,("[RegCallBack] PathReg:%ws exename:%ws",PathReg,exename));
+
+								}
 
 
                             }
@@ -1646,7 +1762,8 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
                         PWCHAR pchrome = wcsstr(CommandLine, L"renderer");
                         PWCHAR pFirefox = wcsstr(CommandLine, L"contentproc");
                         if (pchrome == NULL && pFirefox == NULL) {
-                            InjectDll(ProcessObj, 32);
+							  LOG(LOGFL_INFO,("[ImageNotify] pid:%d x86 inject %ws CommandLine:%ws", ProcessId, exename, CommandLine));
+                            	InjectDll(ProcessObj, 32);
                         }
                     }
 
@@ -1664,7 +1781,7 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
                         PWCHAR pchrome = wcsstr(CommandLine, L"renderer");
                         PWCHAR pFirefox = wcsstr(CommandLine, L"contentproc");
                         if (pchrome == NULL && pFirefox == NULL) {
-                            kprintf("[ImageNotify] pid:%d x64 inject %ws module:%ws", ProcessId, exename, pTempBuf);
+                            LOG(LOGFL_INFO,("[ImageNotify] pid:%d x64 inject %ws CommandLine:%ws", ProcessId, exename, CommandLine));
                             InjectDll(ProcessObj, 64);
                         }
                     }
@@ -1674,29 +1791,21 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
         }
 #else
         //x86 add code
+  
         pPEB = PsGetProcessPeb(ProcessObj);
         bGet = GetProcessNameByObj(ProcessObj, exename);
         bFindExe = FindInBrowser(exename);
         if (bFindExe) {
-
-			if(NtCreateThreadEx==NULL){
-				 kprintf("[ImageNotify] pid:%d x86 inject %ws module:%ws", ProcessId, exename, pTempBuf);
-				InjectDll(ProcessObj, 32);
-				
-			}else{
-	            BOOLEAN bGetCommand = FALSE;
-	            bGetCommand = GetCommandLine(ProcessObj, CommandLine);
-	            if (bGetCommand) {
-	                PWCHAR pchrome = wcsstr(CommandLine, L"renderer");
-	                PWCHAR pFirefox = wcsstr(CommandLine, L"contentproc");
-	                if (pchrome == NULL && pFirefox == NULL) {
-	                    kprintf("[ImageNotify] pid:%d exename:%ws command:%ws", ProcessId, exename, CommandLine);
-	                    InjectDll(ProcessObj, 32);
-	                }
-	            }			
-			}
-		
-
+			BOOLEAN bGetCommand = FALSE;
+			bGetCommand = GetCommandLine(ProcessObj, CommandLine);
+			if (bGetCommand) {
+				PWCHAR pchrome = wcsstr(CommandLine, L"renderer");
+				PWCHAR pFirefox = wcsstr(CommandLine, L"contentproc");
+				if (pchrome == NULL && pFirefox == NULL) {
+					LOG(LOGFL_INFO,("[ImageNotify] pid:%d(%x) x86 inject %ws CommandLine:%ws",ProcessId, ProcessId, exename,CommandLine));
+					InjectDll(ProcessObj, 32);
+				}
+			}	
         }
 
 
@@ -1855,8 +1964,8 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
                         numcode += sizeof(ucode);
                     }
                 }
-                memcpy(pCall, restorcode, numcode);
-                kprintf("[InjectDll] pCall:%p lencode:%d origincode:%p",pCall,lencode,origincode);
+                memcpy(pCall, restorcode, numcode);   
+				LOG(LOGFL_INFO,("[InjectDll] pCall:%p lencode:%d origincode:%p",pCall,lencode,origincode));
                 pParambase = (PUCHAR)MemloadBase + sizeMemLoad;
                 //调用call
                 *(ULONG32*)&callmemload[3] = (ULONG32)pParambase;
@@ -2231,6 +2340,11 @@ PMY_COMMAND_INFO FindInList(const WCHAR *name, LIST_ENTRY *link, PKSPIN_LOCK loc
     return pData;
 }
 
+
+
+
+
+
 /**
  * [ReadDriverParameters This routine tries to read the driver-specific parameters from
     the registry.  These values will be found in the registry location
@@ -2266,19 +2380,15 @@ VOID ReadDriverParameters(IN PUNICODE_STRING RegistryPath)
 
             return;
         }
-        //
         // Read the given value from the registry.
-        //
         RtlInitUnicodeString(&valueName, L"DebugFlags");
         status = ZwQueryValueKey(driverRegKey, &valueName, KeyValuePartialInformation, buffer, sizeof(buffer), &resultLength);
         if (NT_SUCCESS(status)) {
             LoggingFlags = *((PULONG)&(((PKEY_VALUE_PARTIAL_INFORMATION)buffer)->Data));
         }
-
         //
         //  Close the registry entry
         //
-
         ZwClose(driverRegKey);
     }
 }
@@ -2420,6 +2530,7 @@ void EncodeBuffer(PFLT_CALLBACK_DATA Cbd, PPRE_2_POST_CONTEXT p2pCtx, PUCHAR ori
                 //                  kprintf("[PostRead] exename:%ws  bgetname:%d pid:%d",exename,bgetname,PsGetCurrentProcessId());
 
                 if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
+					LOG(LOGFL_INFO,("[PostRead] pid:%d exename:%ws filename:%ws",PsGetCurrentProcessId(),exename,p2pCtx->pStreamCtx->FileName.Buffer));
                     RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Cbd->IoStatus.Information);
                 } else {
                     ULONG i = 0;
@@ -2536,6 +2647,19 @@ BOOLEAN  FindInBrowser(const WCHAR *name)
 }
 
 
+PMY_COMMAND_INFO  FindInProtectFile(const WCHAR *name)
+{
+    PMY_COMMAND_INFO pInfo=NULL;
+    ULONG i = 0;
+    for (i = 0; i < 2; i++) {
+
+        if (_wcsicmp(g_pProtectFile[i].exename, name) == 0) {
+          	pInfo=&g_pProtectFile[i];
+            break;
+        }
+    }
+    return pInfo;
+}
 
 
 ULONG GetPatchSize(PUCHAR Address, int asmlen)
