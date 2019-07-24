@@ -520,7 +520,7 @@ WCHAR     strSys[260]= {0};
 
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName,PUNICODE_STRING pPartialName);
-void 	 EncodeBuffer(PFLT_CALLBACK_DATA Cbd,PPRE_2_POST_CONTEXT p2pCtx,PUCHAR origBuf);
+void EncodeBuffer(PVOID  SwappedBuffer,PUCHAR origBuf,ULONG Len,BOOLEAN bEncrypte);
 NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
 
 
