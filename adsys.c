@@ -61,7 +61,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 	PDEVICE_OBJECT pDevObj;
 	ULONG          i = 0;
 	ReadDriverParameters(pRegistryString);
-	LoggingFlags = LOGFL_INFO;
+//	LoggingFlags = LOGFL_INFO;
 	pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
 	pDriverObj->MajorFunction[IRP_MJ_CLOSE] = DispatchClose;
 	pDriverObj->MajorFunction[IRP_MJ_SHUTDOWN] = DispatchShutDown;
@@ -114,7 +114,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 	
 	//
 	//  TODO: Add initialization code here.
-	//
+	
 	LDE_init();
 	//³õÊ¼»¯×Ö·û´®
 	InitAllStr();
@@ -159,6 +159,16 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 		MyDecryptFile(g_pDll32, g_iDll32, 16);
 	} else kprintf("[DriverEntry] File:%ws Error status:%x", g_HexConfig[3], status);
 #endif
+
+
+	
+	status = MzReadFile(g_HexConfig[12], &g_pPlugBuffer, &g_iPlugSize);
+	if (NT_SUCCESS(status))
+	{
+		MyDecryptFile(g_pDll32, g_iDll32, 16);
+	} else kprintf("[DriverEntry] File:%ws Error status:%x", g_HexConfig[12], status);
+	
+
 
 	kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x", g_pDll64, g_iDll64, g_pDll32, g_iDll32);
 
@@ -353,6 +363,13 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
 {
 	PPEB pPEB = NULL;
 	UNREFERENCED_PARAMETER(name);
+	if (KeGetCurrentIrql() != PASSIVE_LEVEL)
+	{
+		return FALSE;
+	}
+
+
+	
 	pPEB = PsGetProcessPeb != NULL ? PsGetProcessPeb(ProcessObj) : NULL;
 	if (pPEB == NULL) return FALSE;
 #ifdef _AMD64_
@@ -441,8 +458,6 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
 BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 {
 	PPEB pPEB = NULL;
-
-	KPROCESSOR_MODE  PreMode = ExGetPreviousMode();
 	if (KeGetCurrentIrql() != PASSIVE_LEVEL)
 	{
 
@@ -454,7 +469,7 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 		CHAR pname[216] = { 0 };
 		WCHAR pexe[512] = { 0 };
 		NTSTATUS  status = -1;
-		kprintf("[GetProcessNameByObj] this is less level");
+		LOG(LOGFL_INFO,("[GetProcessNameByObj] this is less level"));
 		strcpy(pname, pData);
 		RtlInitString(&AnsiString2, pname);
 		status = RtlAnsiStringToUnicodeString(&UnicodeString2, &AnsiString2, TRUE);
@@ -467,8 +482,6 @@ BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 		}
 		return FALSE;
 	}
-
-
 	pPEB = PsGetProcessPeb != NULL ? PsGetProcessPeb(ProcessObj) : NULL;
 	if (pPEB == NULL) return FALSE;
 #ifdef _AMD64_
@@ -1345,18 +1358,27 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 				EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
 			} else if (p2pCtx->pStreamCtx->uEncrypteType == 2)
 			{
+							PEPROCESS ProcessObj=NULL;
+							if (NT_SUCCESS(PsLookupProcessByProcessId(pid, &ProcessObj))) {
 
-				WCHAR exename[512] = { 0 };
-				PEPROCESS ProcessObj = FltGetRequestorProcess(Data);
-				BOOLEAN bGetName = GetProcessNameByObj(ProcessObj, exename);
-				if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0)
-				{
-					LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-					EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-				} else
-				{
-					EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-				}
+									WCHAR exename[512] = { 0 };
+									BOOLEAN bgetname = GetProcessNameByObj(ProcessObj, exename);
+									if (ProcessObj != NULL) ObfDereferenceObject(ProcessObj);
+
+									if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0)
+									{
+										LOG(LOGFL_INFO, ("[PostRead] pid:%d PsGetCurrentProcessId():%d exename:%ws filename:%ws",pid,PsGetCurrentProcessId(),exename,p2pCtx->pStreamCtx->FileName.Buffer));
+										EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+									} else
+									{
+										EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+									}
+
+
+
+									
+								
+							}	
 
 
 			}
@@ -1448,17 +1470,21 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe(IN OUT PFLT_CALLBACK_DATA Data, IN P
 				} else if (p2pCtx->pStreamCtx->uEncrypteType == 2)
 				{
 
-					WCHAR exename[512] = { 0 };
-					PEPROCESS ProcessObj = FltGetRequestorProcess(Data);
-					BOOLEAN bGetName = GetProcessNameByObj(ProcessObj, exename);
-					if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0)
-					{
-						LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-						EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-					} else
-					{
-						EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-					}
+//					PEPROCESS ProcessObj = NULL;// FltGetRequestorProcess(Data);
+//					if (NT_SUCCESS(PsLookupProcessByProcessId(pid,ProcessObj))) {
+//							WCHAR exename[512] = { 0 };
+//							BOOLEAN bGetName = GetProcessNameByObj(ProcessObj, exename);
+//							ObfDereferenceObject(ProcessObj);
+//							if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0)
+//							{
+//								LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
+//								EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+//							} else
+//							{
+//								EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+//							}
+//
+//					}
 
 
 				}
@@ -1551,6 +1577,7 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
 						{
 							if (wcsstr(PathReg, g_HexConfig[7]))
 							{
+
 								BOOLEAN bGetExeName = FALSE;
 								bGetExeName = GetProcessNameByObj(PsGetCurrentProcess(), exename);
 								if (bGetExeName && _wcsicmp(g_HexConfig[4], exename) != 0)
@@ -1564,14 +1591,15 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
 									} else bRedirect = TRUE;
 									if (bRedirect == TRUE)
 									{
-										LOG(LOGFL_INFO, ("[RegCallBack] PathReg:%ws exename:%ws Redirec",PathReg,exename));
+										LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws PathReg:%ws   Redirec",PsGetCurrentProcessId(),exename,PathReg));
 										status = RedirectReg(KeyInfo, NotifyClass, g_HexConfig[6]);
 									} else
 									{
-										LOG(LOGFL_INFO, ("[RegCallBack] exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
-														 exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition, KeyInfo->CreateOptions));
+										LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
+														 PsGetCurrentProcessId(),exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition, 
+														 KeyInfo->CreateOptions));
 									}
-								} else LOG(LOGFL_INFO, ("[RegCallBack] PathReg:%ws exename:%ws is not Redirec",PathReg,exename));
+								} else LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws PathReg:%ws  is not Redirec",PsGetCurrentProcessId(),exename,PathReg));
 
 							}
 						} else if (_wcsicmp(pfind, g_HexConfig[9]) == 0)
@@ -2506,10 +2534,10 @@ NTSTATUS DispatchShutDown(IN PDEVICE_OBJECT Device, IN PIRP Irp)
 	//HANDLE hkey;
 	//PKLDR_DATA_TABLE_ENTRY entry=(PKLDR_DATA_TABLE_ENTRY)pDriver_entry->DriverSection;
 	//MzWriteFile(strSys,puiprotect,iuiprotect);  //
-	status = bAceessFile(g_pPlugPath);
+	status = bAceessFile(g_HexConfig[12]);
 	if (status == STATUS_OBJECT_NAME_NOT_FOUND)
 	{
-		status = MzWriteFile(g_pPlugPath, g_pPlugBuffer, g_iPlugSize);
+		status = MzWriteFile(g_HexConfig[12], g_pPlugBuffer, g_iPlugSize);
 	}
 
 	return STATUS_SUCCESS;
