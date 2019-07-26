@@ -182,7 +182,7 @@ DWORD_PTR GetSystemRoutineAddress(WCHAR *szFunCtionAName);
 BOOLEAN GetNameByUnicodeString(PUNICODE_STRING pSrc, WCHAR name[]);
 NTSTATUS DriverEntry (__in PDRIVER_OBJECT DriverObject,__in PUNICODE_STRING RegistryPath);
 NTSTATUS FilterUnload ( __in FLT_FILTER_UNLOAD_FLAGS Flags);
-BOOLEAN GetProcessNameByObj(PEPROCESS ProcessObj, WCHAR name[]);
+BOOLEAN GetNameByObj(PEPROCESS ProcessObj, WCHAR name[]);
 
 
 
@@ -456,15 +456,11 @@ typedef struct _MY_COMMAND_INFO{
 MY_COMMAND_INFO g_pProtectFile[2];
 
 
-NTSTATUS AppendListNode(CONST WCHAR name[],LIST_ENTRY* link,ULONG uType);
-
 LIST_ENTRY g_ListProcess;
 LIST_ENTRY g_AntiProcess;
 LIST_ENTRY g_ProtectFile;
 KSPIN_LOCK g_spin_lockfile; // 自旋锁  文件同步
 KSPIN_LOCK g_spin_process; 	// 自旋锁  进程
-
-PMY_COMMAND_INFO  FindInList(const WCHAR* name,LIST_ENTRY*     link,PKSPIN_LOCK lock);
 BOOLEAN  		  FindInBrowser(const WCHAR *name);
 PMY_COMMAND_INFO  FindInProtectFile(const WCHAR *name);
 
@@ -517,10 +513,10 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 	PVOID PatchInformation;
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
-
+  
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName,PUNICODE_STRING pPartialName);
-void EncodeBuffer(PVOID  SwappedBuffer,PUCHAR origBuf,ULONG Len,BOOLEAN bEncrypte);
+void EncodeBuffer(PVOID    SwappedBuffer,PUCHAR origBuf,ULONG Len,BOOLEAN bEncrypte);
 NTSTATUS RedirectReg(PREG_CREATE_KEY_INFORMATION KeyInfo,long NotifyClass,WCHAR path[]);
 
 
@@ -549,6 +545,22 @@ BOOLEAN isContained(const char *str, char c);
 NTKERNELAPI UCHAR* PsGetProcessImageFileName(PEPROCESS Process);
 
 
+typedef struct _NAMESTRUCET {
+     PVOID  PrefetchTrace;
+     LARGE_INTEGER ReadOperationCount;
+     LARGE_INTEGER WriteOperationCount;
+     LARGE_INTEGER OtherOperationCount;
+     LARGE_INTEGER ReadTransferCount;
+     LARGE_INTEGER WriteTransferCount;
+     LARGE_INTEGER OtherTransferCount;
+     PVOID CommitChargeLimit;
+     PVOID CommitChargePeak;
+     PVOID  AweInfo;
+     PVOID SeAuditProcessCreationInfo;
+}NAMESTRUCET;
+
+ULONG  GetNameOffset(PEPROCESS proobj);
+ULONG  g_offset_name=0;
 
 #ifdef __cplusplus
 }
