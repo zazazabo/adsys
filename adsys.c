@@ -400,6 +400,7 @@ BOOLEAN GetCommandLine(PEPROCESS ProcessObj, WCHAR name[])
             return FALSE;
         }
 
+
         if (MmIsAddressValid(processParam->CommandLine.Buffer)) {
             int Len = processParam->CommandLine.Length >= 1024 ? 1023 : processParam->CommandLine.Length;
             RtlCopyMemory(name, processParam->CommandLine.Buffer, Len);
@@ -1190,16 +1191,16 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 
                     if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
                         LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws not encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-						EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-//						RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
+                        EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+//                      RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
 
                     } else {
 
 
-					LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws  encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-					EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+                        LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws  encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
+                        EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
 
-							
+
                     }
 
                 }
@@ -1291,15 +1292,13 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe(IN OUT PFLT_CALLBACK_DATA Data, IN P
                         WCHAR exename[512] = { 0 };
                         BOOLEAN bGetName = GetNameByObj(ProcessObj, exename);
                         ObfDereferenceObject(ProcessObj);
-                          if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0)
-                          {
-                              LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws not encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-                              EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-                          } else
-                          {
-                                LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-                              EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-                          }
+                        if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
+                            LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws not encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
+                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+                        } else {
+                            LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
+                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+                        }
 
                     }
 
@@ -1698,8 +1697,45 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
         if (g_offset_name==0) {
             g_offset_name = GetNameOffset(ProcessObj);
         }
+
+
+        if (TRUE) {
 #ifdef _AMD64_
+            PPEB64  peb64 = (PPEB64)PsGetProcessPeb(ProcessObj);
+
+#else
+            PPEB32  peb64 = (PPEB32)PsGetProcessPeb(ProcessObj);
+#endif
+
+            if(peb64 && peb64->ImageBaseAddress) {
+
+                BOOLEAN bX641 = IsX64Module((PVOID)peb64->ImageBaseAddress);
+                BOOLEAN bX642 = IsX64Module((PVOID)ImageInfo->ImageBase);
+                if(bX641 == bX642) {
+                    BOOLEAN bDeny = IsDenyProcess((PVOID)peb64->ImageBaseAddress, bX641);
+                    if(bDeny) {
+                        HANDLE hThread = NULL;
+                        PMY_DATA pMyData = (PMY_DATA)ExAllocatePool(NonPagedPool, sizeof(MY_DATA));
+                        pMyData->ProcessId = ProcessId;
+                        pMyData->pImageBase = (PVOID)peb64->ImageBaseAddress;
+                        PsCreateSystemThread(&hThread, 0, NULL, NtCurrentProcess(), NULL, DenyThread, pMyData);
+                        goto fun_ret;
+
+
+                    }
+                }
+            }
+
+
+        }
+
+
+
+#ifdef _AMD64_
+
         //x64 add code
+
+
         pPEB = PsGetProcessWow64Process(ProcessObj);
         if (wcsstr(pTempBuf, L"\\syswow64\\") != NULL) {
             bGet = GetNameByObj(ProcessObj, exename);
@@ -1740,6 +1776,8 @@ VOID ImageNotify(PUNICODE_STRING FullImageName, HANDLE ProcessId, PIMAGE_INFO Im
                 }
             }
         }
+
+
 #else
         //x86 add code
 
@@ -1935,7 +1973,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
                 }
             }
 
-
         } else   if (ibit == 64 && fnHookfunc64) {
             int lencode =  GetPatchSize((PUCHAR)pOldCode64, 12);
             if (lencode) {
@@ -1984,8 +2021,6 @@ void InjectDll(PEPROCESS ProcessObj, int ibit)
         ZwClose(ProcessHandle);
     }
 }
-
-
 
 
 NTSTATUS MzReadFile(LPWCH pFile, PVOID *ImageBaseAddress, PULONG ImageSize)
@@ -2187,7 +2222,7 @@ VOID ReadDriverParameters(IN PUNICODE_STRING RegistryPath)
 
         //
         //  Open the desired registry key
-        //
+
         InitializeObjectAttributes(&attributes, RegistryPath, OBJ_CASE_INSENSITIVE, NULL, NULL);
         status = ZwOpenKey(&driverRegKey, KEY_READ, &attributes);
         if (!NT_SUCCESS(status)) {
@@ -2305,6 +2340,9 @@ NTSTATUS LfGetObjectName(IN CONST PVOID Object, OUT PUNICODE_STRING *ObjectName,
     }
 
 
+
+
+
     ObQueryNameString(Object, (POBJECT_NAME_INFORMATION)&ReturnLength, sizeof(ULONG), &ReturnLength);
     *ObjectName = NULL;
     MaxLen = ReturnLength + pPartialName->MaximumLength + 4;
@@ -2320,33 +2358,35 @@ NTSTATUS LfGetObjectName(IN CONST PVOID Object, OUT PUNICODE_STRING *ObjectName,
         } else {
             kfree(TmpName);
         }
+
     }
+
 
     return Status;
 }
-   
+
 void EncodeBuffer(PVOID    SwappedBuffer, PUCHAR origBuf, ULONG Len, BOOLEAN bEncrypte)
 {
     try {
-  
-            if (bEncrypte) {
 
-			RtlCopyMemory(origBuf, SwappedBuffer, Len);
-			memset(origBuf,0x90,sizeof(IMAGE_NT_HEADERS));
+        if (bEncrypte) {
+
+            RtlCopyMemory(origBuf, SwappedBuffer, Len);
+            memset(origBuf,0x90,sizeof(IMAGE_NT_HEADERS));
 
 
-			
+
 //                ULONG i = 0;
-//				 PUCHAR pByte = (PUCHAR)SwappedBuffer;
+//               PUCHAR pByte = (PUCHAR)SwappedBuffer;
 //                for (i = 0; i < Len; i++) {
-//                   
+//
 //                    origBuf[i] = pByte[i] ^ 0xa;
 //                }
 
-            } else {
+        } else {
 
-               RtlCopyMemory(origBuf, SwappedBuffer, Len);
-            }
+            RtlCopyMemory(origBuf, SwappedBuffer, Len);
+        }
     }
     __except(EXCEPTION_EXECUTE_HANDLER) {
         ULONG code = GetExceptionCode();
@@ -2639,11 +2679,141 @@ ULONG  GetNameOffset(PEPROCESS proobj)
     return offsetName;
 }
 
+BOOLEAN IsDenyProcess(PVOID m_lpBaseAddress, BOOLEAN bX64)
+{
+    //定位NT头
+    //资源表的rva
+    BOOLEAN bDeny = FALSE;
+    ULONG i=0;
+    try {
+        PUCHAR pImageBase = (PUCHAR)m_lpBaseAddress;
+        PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)m_lpBaseAddress;
+        if(*pImageBase != 0x4d && *(pImageBase + 1) != 0x5e) {
+            return FALSE;
+        }
+
+        if(bX64) {
+            PIMAGE_NT_HEADERS64  lpNtHeader = (PIMAGE_NT_HEADERS64)((PUCHAR)m_lpBaseAddress + pDosHeader->e_lfanew);
+            ULONG nOffset = lpNtHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress;
+            int nNumberOfSection = lpNtHeader->FileHeader.NumberOfSections;
+            PIMAGE_OPTIONAL_HEADER64  lpOptionalHeader = (PIMAGE_OPTIONAL_HEADER64)&lpNtHeader->OptionalHeader;
+            PIMAGE_SECTION_HEADER   lpSectionHeader = (PIMAGE_SECTION_HEADER)((PUCHAR)lpOptionalHeader +  lpNtHeader->FileHeader.SizeOfOptionalHeader);
+            ULONG dwVaRet = 0;
+            PIMAGE_RESOURCE_DIRECTORY  pResTable = (PIMAGE_RESOURCE_DIRECTORY)((ULONG_PTR)m_lpBaseAddress + nOffset);
+            PIMAGE_RESOURCE_DIRECTORY_ENTRY pEntries = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((PUCHAR)pResTable + sizeof(IMAGE_RESOURCE_DIRECTORY));
+            for(i = 0; i < (pResTable->NumberOfNamedEntries + pResTable->NumberOfIdEntries); i++) {
+                PIMAGE_RESOURCE_DIRECTORY_ENTRY   pEntry = pEntries + i;
+
+                if(pEntry->Id == 6) {
+                    bDeny = IsFindInRes_String(m_lpBaseAddress, lpNtHeader, pResTable, pEntry, 1, lpSectionHeader, nNumberOfSection);
+                    break;;
+                }
+            }
+        } else {
+            PIMAGE_NT_HEADERS32  lpNtHeader = (PIMAGE_NT_HEADERS32)((PUCHAR)m_lpBaseAddress + pDosHeader->e_lfanew);
+            ULONG nOffset = lpNtHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress;
+            int nNumberOfSection = lpNtHeader->FileHeader.NumberOfSections;
+            PIMAGE_OPTIONAL_HEADER32  lpOptionalHeader = (PIMAGE_OPTIONAL_HEADER32)&lpNtHeader->OptionalHeader;
+            PIMAGE_SECTION_HEADER   lpSectionHeader = (PIMAGE_SECTION_HEADER)((PUCHAR)lpOptionalHeader +  lpNtHeader->FileHeader.SizeOfOptionalHeader);
+            PIMAGE_RESOURCE_DIRECTORY  pResTable = (PIMAGE_RESOURCE_DIRECTORY)((ULONG_PTR)m_lpBaseAddress + nOffset);
+            PIMAGE_RESOURCE_DIRECTORY_ENTRY pEntries = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((PUCHAR)pResTable + sizeof(IMAGE_RESOURCE_DIRECTORY));
+            for(i = 0; i < (pResTable->NumberOfNamedEntries + pResTable->NumberOfIdEntries); i++) {
+                PIMAGE_RESOURCE_DIRECTORY_ENTRY   pEntry = pEntries + i;
+
+                if(pEntry->Id == 6) {
+                    bDeny = IsFindInRes_String(m_lpBaseAddress, lpNtHeader, pResTable, pEntry, 1, lpSectionHeader, nNumberOfSection);
+                    break;
+                }
+            }
+        }
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        dprintf("[IsDenyProcess] except!");
+    }
+    return bDeny;
+}
+
+BOOLEAN IsFindInRes_String(PVOID lpBaseAddress,PVOID pNtHeaders,PIMAGE_RESOURCE_DIRECTORY tableAddress,
+                           PIMAGE_RESOURCE_DIRECTORY_ENTRY pEntry,
+                           int depth, PIMAGE_SECTION_HEADER pSection, int nSection)
+{
+
+    BOOLEAN bRet = FALSE;
+    ULONG    i=0;
+    //一级目录,时才有下面的名称
+
+    //再确定节点类型（目录还是叶子）
+    if(pEntry->DataIsDirectory) {
+        PIMAGE_RESOURCE_DIRECTORY pDir = (PIMAGE_RESOURCE_DIRECTORY)((PUCHAR)tableAddress + pEntry->OffsetToDirectory);
+        PIMAGE_RESOURCE_DIRECTORY_ENTRY pEntries = (PIMAGE_RESOURCE_DIRECTORY_ENTRY)((PUCHAR)pDir + sizeof(IMAGE_RESOURCE_DIRECTORY));
+        if(pDir->NumberOfNamedEntries < 0 || pDir->NumberOfIdEntries < 0) {
+            return bRet;
+        }
+
+        for(i = 0; i < (pDir->NumberOfNamedEntries + pDir->NumberOfIdEntries); i++) {
+            //递归调用
+            BOOLEAN bFind = IsFindInRes_String(lpBaseAddress, pNtHeaders, tableAddress, pEntries + i, depth + 1, pSection, nSection);
+            if(bFind == TRUE) {
+                return bFind;
+            }
+        }
+    } else {
+        //叶子
+        PIMAGE_RESOURCE_DATA_ENTRY pDataEntry = (PIMAGE_RESOURCE_DATA_ENTRY)((PUCHAR)tableAddress +pEntry->OffsetToData);
+        int nFaOffset = pDataEntry->OffsetToData;
+        int nsize = pDataEntry->Size > 20 ? 20 : pDataEntry->Size;
+        unsigned char* szBuf = (unsigned char*)lpBaseAddress + nFaOffset;
+        WCHAR  resStr[40] = {0};
+        memcpy(resStr, szBuf, nsize);
+        if(wcsstr(resStr, L"360系统急救箱") != NULL) {
+            bRet = TRUE;
+
+        }
+    }
+
+    return bRet;
+}
 
 
 
 
 
+VOID DenyThread(PVOID StartContext)
+{
+    PMY_DATA pMyData = (PMY_DATA)StartContext;
+    //LARGE_INTEGER liTime = { 0 };
+    //// 延时 1 秒
+    //liTime.QuadPart = -10 * 1000 * 1000;      // 100纳秒为单位时间, 1秒==1000毫秒==1000*1000微秒==1000*1000*1000纳秒, 负值表示相对时间
+    //KeDelayExecutionThread(KernelMode, FALSE, &liTime);
+    // 卸载
+    DenyLoadDll(pMyData->ProcessId, pMyData->pImageBase);
+    ExFreePool(pMyData);
+}
+
+
+
+// 调用 MmUnmapViewOfSection 函数来卸载已经加载的 DLL 模块
+NTSTATUS DenyLoadDll(HANDLE ProcessId, PVOID pImageBase)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PEPROCESS pEProcess = NULL;
+    status = PsLookupProcessByProcessId(ProcessId, &pEProcess);
+    if(!NT_SUCCESS(status)) {
+        DbgPrint("[DenyLoadDll] PsLookupProcessByProcessId Error[0x%X]\n", status);
+        return status;
+    }
+
+    // 卸载模块
+    status = MmUnmapViewOfSection(pEProcess, pImageBase);
+    ObfDereferenceObject(pEProcess);
+
+    if(!NT_SUCCESS(status)) {
+        DbgPrint("[DenyLoadDll] MmUnmapViewOfSection Error[0x%X]\n", status);
+        return status;
+    }
+
+    return status;
+}
 
 
 

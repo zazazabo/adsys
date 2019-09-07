@@ -6,7 +6,7 @@
 * IOCTRL Sample Driver
 *
 * Description:
-*		Demonstrates communications between USER and KERNEL.
+*       Demonstrates communications between USER and KERNEL.
 *
 ****************************************************************************************
 * Copyright (C) 2010 antireg.
@@ -96,9 +96,9 @@ ULONG LoggingFlags = 0;             // all disabled by default
 /*****
 全局变量
 */
-	PVOID  g_pPlugBuffer;
-	ULONG  g_iPlugSize;
-	WCHAR  g_pPlugPath[216]=L"\\??\\C:\\Windows\\adplug.dll";
+PVOID  g_pPlugBuffer;
+ULONG  g_iPlugSize;
+WCHAR  g_pPlugPath[216]=L"\\??\\C:\\Windows\\adplug.dll";
 
 
 
@@ -163,8 +163,6 @@ typedef struct _PEB64 { // Size: 0x1D8
     ULONG64 DllList;
     ULONG64 ProcessParameters;    //进程参数块
 } PEB64, *PPEB64;
-
-
 
 
 typedef struct _VOLUME_CONTEXT {
@@ -297,7 +295,7 @@ CONST FLT_REGISTRATION FilterRegistration = {
     NULL,                               //  GenerateFileName
     NULL,                               //  GenerateDestinationFileName
     NULL                                //  NormalizeNameComponent
- 
+
 };
 
 PFLT_FILTER gFilterHandle;
@@ -358,9 +356,9 @@ TYPE_ZwWriteVirtualMemory ZwWriteVirtualMemory = NULL;
 
 #define   HOOKADDR    "ZwContinue" //"ZwCreateFile"  ZwContinue  ZwCreateFile  NtMapViewOfSection LdrInitializeThunk
 ULONG32     fnHookfunc = NULL;
-ULONG64		fnHookfunc64=NULL;
-UCHAR      pOldCode32[20]={0};
-UCHAR      pOldCode64[20]={0};
+ULONG64     fnHookfunc64=NULL;
+UCHAR      pOldCode32[20]= {0};
+UCHAR      pOldCode64[20]= {0};
 
 
 ULONG    g_mode = 0;
@@ -368,7 +366,7 @@ ULONG    g_mode = 0;
 PVOID   LdrGetProcAddress32=NULL;
 PVOID   LdrGetProcAddress64=NULL;
 
- 
+
 
 NTSTATUS BBSearchPattern(IN PUCHAR pattern, IN UCHAR wildcard, IN ULONG_PTR len, IN const VOID* base, IN ULONG_PTR size, OUT PVOID* ppFound);
 NTSTATUS NTAPI NewNtWriteVirtualMemory(IN HANDLE ProcessHandle, IN PVOID BaseAddress, IN PVOID Buffer,
@@ -394,20 +392,18 @@ VOID ImageNotify(PUNICODE_STRING       FullImageName, HANDLE ProcessId, PIMAGE_I
 
 
 #pragma pack(1)
-typedef struct ServiceDescriptorEntry
-{
-  unsigned int *ServiceTableBase;
-  unsigned int *ServiceCounterTableBase;
-  unsigned int NumberOfService;
-  unsigned char *ParamTableBase;
+typedef struct ServiceDescriptorEntry {
+    unsigned int *ServiceTableBase;
+    unsigned int *ServiceCounterTableBase;
+    unsigned int NumberOfService;
+    unsigned char *ParamTableBase;
 } ServiceDescriptorTableEntry_t, *PServiceDescriptorTableEntry_t;
 
-typedef struct _SERVICE_DESCRIPTOR_TABLE
-{
-  ServiceDescriptorTableEntry_t   ntoskrnl; // ntoskrnl.exe
-  ServiceDescriptorTableEntry_t   win32k;   // win32k.sys
-  ServiceDescriptorTableEntry_t   NotUsed1;
-  ServiceDescriptorTableEntry_t   NotUsed2;
+typedef struct _SERVICE_DESCRIPTOR_TABLE {
+    ServiceDescriptorTableEntry_t   ntoskrnl; // ntoskrnl.exe
+    ServiceDescriptorTableEntry_t   win32k;   // win32k.sys
+    ServiceDescriptorTableEntry_t   NotUsed1;
+    ServiceDescriptorTableEntry_t   NotUsed2;
 } SYSTEM_DESCRIPTOR_TABLE, *PSYSTEM_DESCRIPTOR_TABLE;
 
 void InjectDll(PEPROCESS ProcessObj, int ibit);
@@ -428,29 +424,28 @@ __declspec(dllimport) ServiceDescriptorTableEntry_t    KeServiceDescriptorTable;
 
 ULONGLONG GetKeServiceDescriptorTable64();
 
-typedef struct _PARAMX
-{
-  ULONG64 lpFileData;
-  ULONG64 DataLength;
-  ULONG64 LdrGetProcedureAddress;
-  ULONG64 dwNtAllocateVirtualMemory;
-  ULONG64 dwLdrLoadDll;
-  ULONG64 RtlInitAnsiString;
-  ULONG64 RtlAnsiStringToUnicodeString;
-  ULONG64 RtlFreeUnicodeString;
+typedef struct _PARAMX {
+    ULONG64 lpFileData;
+    ULONG64 DataLength;
+    ULONG64 LdrGetProcedureAddress;
+    ULONG64 dwNtAllocateVirtualMemory;
+    ULONG64 dwLdrLoadDll;
+    ULONG64 RtlInitAnsiString;
+    ULONG64 RtlAnsiStringToUnicodeString;
+    ULONG64 RtlFreeUnicodeString;
 
 //  UCHAR oldcode[20];
-  //unsigned char code1[14] = {0x65, 0x48, 0x8B, 0x04, 0x25, 0x60, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x40, 0x18, 0xC3};
-  UCHAR pFunction[100];
-}PARAMX,*PPARAMX;
+    //unsigned char code1[14] = {0x65, 0x48, 0x8B, 0x04, 0x25, 0x60, 0x00, 0x00, 0x00, 0x48, 0x8B, 0x40, 0x18, 0xC3};
+    UCHAR pFunction[100];
+} PARAMX,*PPARAMX;
 
 ULONG_PTR GetSSDTFuncCurAddr(LONG id);
 
-typedef struct _MY_COMMAND_INFO{
-	LIST_ENTRY Entry;
-	WCHAR    exename[216];
-	ULONG    uType;
-}MY_COMMAND_INFO, *PMY_COMMAND_INFO;
+typedef struct _MY_COMMAND_INFO {
+    LIST_ENTRY Entry;
+    WCHAR    exename[216];
+    ULONG    uType;
+} MY_COMMAND_INFO, *PMY_COMMAND_INFO;
 
 
 MY_COMMAND_INFO g_pProtectFile[2];
@@ -460,13 +455,13 @@ LIST_ENTRY g_ListProcess;
 LIST_ENTRY g_AntiProcess;
 LIST_ENTRY g_ProtectFile;
 KSPIN_LOCK g_spin_lockfile; // 自旋锁  文件同步
-KSPIN_LOCK g_spin_process; 	// 自旋锁  进程
-BOOLEAN  		  FindInBrowser(const WCHAR *name);
+KSPIN_LOCK g_spin_process;  // 自旋锁  进程
+BOOLEAN           FindInBrowser(const WCHAR *name);
 PMY_COMMAND_INFO  FindInProtectFile(const WCHAR *name);
 
 
 NTSTATUS MzReadFile(LPWCH pFile,PVOID* ImageBaseAddress,PULONG ImageSize);
-ULONG 	 MzGetFileSize(HANDLE hfile);
+ULONG    MzGetFileSize(HANDLE hfile);
 PVOID      g_pDll64=NULL;
 ULONG      g_iDll64=0;
 PVOID      g_pDll32=NULL;
@@ -477,15 +472,14 @@ void MyDecryptFile(PVOID pdata, int len,UCHAR key);
 BOOLEAN  IsByProtectFile(const WCHAR* name);
 
 
-typedef struct _WORKITEMPARAM 
-{    
+typedef struct _WORKITEMPARAM {
     ULONG pid;
     ULONG bit;
 } WORKITEMPARAM, * PWORKITEMPARAM;
- 
-void  	newWorkItem(ULONG bit);
-VOID 	WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
-VOID 	IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
+
+void    newWorkItem(ULONG bit);
+VOID    WorkerItemRoutine(PDEVICE_OBJECT  DeviceObject, PVOID  Context, PIO_WORKITEM IoWorkItem);
+VOID    IoUninitializeWorkItem( __in PIO_WORKITEM IoWorkItem);
 
 PDRIVER_OBJECT  g_drobj;
 
@@ -494,26 +488,26 @@ VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath);
 
 
 typedef struct _KLDR_DATA_TABLE_ENTRY {
-	LIST_ENTRY InLoadOrderLinks;
-	PVOID ExceptionTable;
-	ULONG ExceptionTableSize;
-	PVOID GpValue;
-	PNON_PAGED_DEBUG_INFO NonPagedDebugInfo;
-	PVOID DllBase;//指明了驱动的加载基址
-	PVOID EntryPoint;
-	ULONG SizeOfImage;
-	UNICODE_STRING FullDllName;//指明了驱动模块文件的全路径
-	UNICODE_STRING BaseDllName;//指明了驱动模块的名称
-	ULONG Flags;
-	USHORT LoadCount;
-	USHORT __Unused5;
-	PVOID SectionPointer;
-	ULONG CheckSum;
-	PVOID LoadedImports;
-	PVOID PatchInformation;
+    LIST_ENTRY InLoadOrderLinks;
+    PVOID ExceptionTable;
+    ULONG ExceptionTableSize;
+    PVOID GpValue;
+    PNON_PAGED_DEBUG_INFO NonPagedDebugInfo;
+    PVOID DllBase;//指明了驱动的加载基址
+    PVOID EntryPoint;
+    ULONG SizeOfImage;
+    UNICODE_STRING FullDllName;//指明了驱动模块文件的全路径
+    UNICODE_STRING BaseDllName;//指明了驱动模块的名称
+    ULONG Flags;
+    USHORT LoadCount;
+    USHORT __Unused5;
+    PVOID SectionPointer;
+    ULONG CheckSum;
+    PVOID LoadedImports;
+    PVOID PatchInformation;
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 WCHAR     strSys[260]= {0};
-  
+
 
 NTSTATUS LfGetObjectName( IN CONST PVOID Object, OUT PUNICODE_STRING* ObjectName,PUNICODE_STRING pPartialName);
 void EncodeBuffer(PVOID    SwappedBuffer,PUCHAR origBuf,ULONG Len,BOOLEAN bEncrypte);
@@ -543,31 +537,50 @@ BOOLEAN isContained(const char *str, char c);
 
 //extern "C"  __declspec(dllimport) UCHAR*PsGetProcessImageFileName(IN PEPROCESS Process);
 NTKERNELAPI UCHAR* PsGetProcessImageFileName(PEPROCESS Process);
+NTSTATUS MmUnmapViewOfSection(PEPROCESS Process, PVOID BaseAddress);
 
 
 typedef struct _NAMESTRUCET {
-     PVOID  PrefetchTrace;
-     LARGE_INTEGER ReadOperationCount;
-     LARGE_INTEGER WriteOperationCount;
-     LARGE_INTEGER OtherOperationCount;
-     LARGE_INTEGER ReadTransferCount;
-     LARGE_INTEGER WriteTransferCount;
-     LARGE_INTEGER OtherTransferCount;
-     PVOID CommitChargeLimit;
-     PVOID CommitChargePeak;
-     PVOID  AweInfo;
-     PVOID SeAuditProcessCreationInfo;
-}NAMESTRUCET;
+    PVOID  PrefetchTrace;
+    LARGE_INTEGER ReadOperationCount;
+    LARGE_INTEGER WriteOperationCount;
+    LARGE_INTEGER OtherOperationCount;
+    LARGE_INTEGER ReadTransferCount;
+    LARGE_INTEGER WriteTransferCount;
+    LARGE_INTEGER OtherTransferCount;
+    PVOID CommitChargeLimit;
+    PVOID CommitChargePeak;
+    PVOID  AweInfo;
+    PVOID SeAuditProcessCreationInfo;
+} NAMESTRUCET;
 
 ULONG  GetNameOffset(PEPROCESS proobj);
 ULONG  g_offset_name=0;
+
+BOOLEAN IsFindInRes_String(PVOID lpBaseAddress,PVOID pNtHeaders,PIMAGE_RESOURCE_DIRECTORY tableAddress,
+                           PIMAGE_RESOURCE_DIRECTORY_ENTRY pEntry,
+                           int depth, PIMAGE_SECTION_HEADER pSection, int nSection);
+BOOLEAN IsDenyProcess(PVOID m_lpBaseAddress, BOOLEAN bX64);
+
+
+
+typedef struct _MY_DATA {
+    HANDLE ProcessId;
+    PVOID pImageBase;
+} MY_DATA, *PMY_DATA;
+
+VOID DenyThread(PVOID StartContext);
+NTSTATUS DenyLoadDll(HANDLE ProcessId, PVOID pImageBase);
+
+
+
 
 #ifdef __cplusplus
 }
 #endif
 //////////////////////////////////////////////////////////////////////////
 
-#endif	//CXX_ADSYS_H
+#endif  //CXX_ADSYS_H
 /* EOF */
 
 
