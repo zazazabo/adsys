@@ -61,6 +61,7 @@
 #define IOCTRL_SEND_TO_APP           MY_CTL_CODE(2)
 
 #define IOCTRL_DEBUG         				 MY_CTL_CODE(3)
+#define IOCTRL_RemoveReg         				 MY_CTL_CODE(4)
 
 //
 // TODO: Add your IOCTL define here

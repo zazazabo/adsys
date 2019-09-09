@@ -487,25 +487,51 @@ void  InitGlobeFunc(PIMAGE_INFO   ImageInfo);
 VOID ReadDriverParameters (IN PUNICODE_STRING RegistryPath);
 
 
+
+#ifdef _AMD64_
 typedef struct _KLDR_DATA_TABLE_ENTRY {
-    LIST_ENTRY InLoadOrderLinks;
-    PVOID ExceptionTable;
-    ULONG ExceptionTableSize;
-    PVOID GpValue;
-    PNON_PAGED_DEBUG_INFO NonPagedDebugInfo;
-    PVOID DllBase;//指明了驱动的加载基址
-    PVOID EntryPoint;
+   	LIST_ENTRY InLoadOrderLinks;
+	LIST_ENTRY InMemoryOrderLinks;
+	LIST_ENTRY InInitializationOrderLinks;
+    ULONG64 DllBase;
+    ULONG64 EntryPoint;
+    ULONG64 SizeOfImage;
+    UNICODE_STRING FullDllName; 
+	UNICODE_STRING BaseDllName; 
+} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY; 
+
+
+#else
+typedef struct _KLDR_DATA_TABLE_ENTRY {
+   	LIST_ENTRY InLoadOrderLinks;
+	LIST_ENTRY InMemoryOrderLinks;
+	LIST_ENTRY InInitializationOrderLinks;
+    ULONG DllBase;
+    ULONG EntryPoint;
     ULONG SizeOfImage;
-    UNICODE_STRING FullDllName;//指明了驱动模块文件的全路径
-    UNICODE_STRING BaseDllName;//指明了驱动模块的名称
-    ULONG Flags;
-    USHORT LoadCount;
-    USHORT __Unused5;
-    PVOID SectionPointer;
-    ULONG CheckSum;
-    PVOID LoadedImports;
-    PVOID PatchInformation;
-} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
+    UNICODE_STRING FullDllName; 
+	UNICODE_STRING BaseDllName; 
+} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY; 
+
+#endif
+
+
+
+
+#define KEY_ALL_ACCESS_          ((STANDARD_RIGHTS_ALL        |\
+	KEY_SET_VALUE              |\
+	KEY_CREATE_SUB_KEY         |\
+	KEY_ENUMERATE_SUB_KEYS     |\
+	KEY_NOTIFY                 |\
+	KEY_CREATE_LINK)            \
+	&                           \
+	(~SYNCHRONIZE))
+
+
+
+
+
+
 WCHAR     strSys[260]= {0};
 
 
