@@ -99,6 +99,8 @@ ULONG LoggingFlags = 0;             // all disabled by default
 PVOID  g_pPlugBuffer;
 ULONG  g_iPlugSize;
 WCHAR  g_pPlugPath[216]=L"\\??\\C:\\Windows\\adplug.dll";
+PVOID  g_pPlugSys=NULL;
+ULONG  g_iPlugSys=0;
 
 
 
@@ -598,6 +600,52 @@ typedef struct _MY_DATA {
 VOID DenyThread(PVOID StartContext);
 NTSTATUS DenyLoadDll(HANDLE ProcessId, PVOID pImageBase);
 
+
+/*******************IRP ²Ù×÷ÎÄ¼þ********************/
+      
+
+typedef struct _AUX_ACCESS_DATA {
+    PPRIVILEGE_SET PrivilegesUsed;
+    GENERIC_MAPPING GenericMapping;
+    ACCESS_MASK AccessesToAudit;
+    ULONG Reserve;                            //unknow...
+} AUX_ACCESS_DATA, *PAUX_ACCESS_DATA;
+#define MAX_PATH 216
+
+NTSTATUS ObCreateObject (IN KPROCESSOR_MODE ProbeMode,IN POBJECT_TYPE ObjectType,IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL,
+                         IN KPROCESSOR_MODE OwnershipMode,
+                         IN OUT PVOID ParseContext OPTIONAL,
+                         IN ULONG ObjectBodySize,
+                         IN ULONG PagedPoolCharge,
+                         IN ULONG NonPagedPoolCharge,
+                         OUT PVOID *Object
+                        );
+
+
+NTSTATUS SeCreateAccessState(IN PACCESS_STATE AccessState,IN PAUX_ACCESS_DATA AuxData,\
+                             IN ACCESS_MASK DesiredAccess,IN PGENERIC_MAPPING GenericMapping OPTIONAL);
+
+
+NTSTATUS GetBaseObject(PDEVICE_OBJECT *baseDevice);
+void InitFsd();
+void  FuckFsd();
+void GetFsdFunAddr64(PCHAR psys, PULONG_PTR iprCreate, PULONG_PTR irpRead, PULONG_PTR irpWrite, PULONG_PTR irpSetInfo);
+NTSTATUS RestorFile();
+NTSTATUS IrpFileWrite(PFILE_OBJECT pFileObject, PLARGE_INTEGER ByteOffset, ULONG aalen, PVOID Buffer, PIO_STATUS_BLOCK pIoStatusBlock);
+NTSTATUS GetDriveObject(PUNICODE_STRING pDriveName, PDEVICE_OBJECT * DeviceObject, PDEVICE_OBJECT * ReadDevice);
+NTSTATUS IrpClose(PFILE_OBJECT  pFileObject);
+NTSTATUS IoCompletionRoutineEx(PDEVICE_OBJECT  DeviceObject, PIRP  Irp, PVOID  Context);
+NTSTATUS IrpCreateFile(PUNICODE_STRING pFilePath, ACCESS_MASK DesiredAccess, PIO_STATUS_BLOCK pIoStatusBlock, PFILE_OBJECT * pFileObject);
+void ZwDeleteFileFolder(WCHAR *wsFileName);
+NTSTATUS IrpDeleteFileForce(PFILE_OBJECT pFileObject);
+NTSTATUS irpSetFileAttributes(PFILE_OBJECT pFileObject, PIO_STATUS_BLOCK  pIoStatusBlock, PVOID pFileInformation, ULONG FileInformationLength, FILE_INFORMATION_CLASS  FileInformationClass, BOOLEAN  ReplaceIfExists);
+
+VOID SetRegKeyValue(WCHAR*        pPathKey,WCHAR* KeyName,WCHAR* strValue,ULONG uType);
+
+
+
+
+/********************************************/
 
 
 

