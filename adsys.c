@@ -62,10 +62,6 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObj, IN PUNICODE_STRING pRegistryS
     ULONG          i = 0;
     kprintf("***************************************************");
 
-	
-
-	
-
     ReadDriverParameters(pRegistryString);
 //  LoggingFlags = LOGFL_INFO;
     pDriverObj->MajorFunction[IRP_MJ_CREATE] = DispatchCreate;
